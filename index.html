@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="MyFinance">
@@ -24,6 +24,7 @@
   --safe-bottom:env(safe-area-inset-bottom,0px);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html{touch-action:pan-x pan-y;}
 html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;font-size:15px;overflow:hidden;}
 .app-shell{display:flex;flex-direction:column;height:100dvh;max-width:430px;margin:0 auto;overflow:hidden;}
 .status-space{height:var(--safe-top);background:var(--bg);flex-shrink:0;}
@@ -426,19 +427,19 @@ input:checked+.toggle-slider::before{transform:translateX(20px);background:#0a0a
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin:8px 16px 8px;">Accounts</div>
       <div class="card">
         <div class="field-label">Add Account</div>
-        <div class="field-group" style="margin-top:8px"><input class="field-input" type="text" id="accBank" placeholder="e.g. BAM, Banrural, Chase, PayPal…"></div>
+        <div class="field-group" style="margin-top:8px"><input class="field-input" type="text" id="accBank2" placeholder="e.g. BAM, Banrural, Chase, PayPal…"></div>
         <div class="field-group">
-          <select class="field-select full" id="accType">
+          <select class="field-select full" id="accType2">
             <option value="Checking">Checking</option><option value="Savings">Savings</option>
             <option value="Credit Card">Credit Card</option><option value="Cash">Cash</option>
             <option value="Digital Wallet">Digital Wallet</option><option value="Investment">Investment</option><option value="Other">Other</option>
           </select>
         </div>
-        <div class="field-group"><input class="field-input" type="number" id="accLast4" placeholder="Last 4 digits (optional)" inputmode="numeric"></div>
+        <div class="field-group"><input class="field-input" type="number" id="accLast42" placeholder="Last 4 digits (optional)" inputmode="numeric"></div>
         <div class="field-group">
-          <select class="field-select full" id="accCurrency"><option value="USD">USD $</option><option value="GTQ">GTQ Q</option></select>
+          <select class="field-select full" id="accCurrency2"><option value="USD">USD $</option><option value="GTQ">GTQ Q</option></select>
         </div>
-        <button class="submit-btn" id="addAccBtn" onclick="addAccount()">Add Account</button>
+        <button class="submit-btn" id="addAccBtn2" onclick="addAccount2()">Add Account</button>
       </div>
 
       <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin:8px 16px 8px;">My Accounts</div>
@@ -707,6 +708,30 @@ async function addAccount() {
     document.getElementById('accLast4').value='';
     showToast('✓ Account added');
     renderAccounts();
+    setSyncStatus('');
+  } catch(e){ showToast('⚠️ Error saving'); setSyncStatus('error'); }
+  btn.disabled=false; btn.textContent='Add Account';
+}
+
+async function addAccount2() {
+  const bank=document.getElementById('accBank2').value.trim();
+  const type=document.getElementById('accType2').value;
+  const last4=document.getElementById('accLast42').value.trim();
+  const currency=document.getElementById('accCurrency2').value;
+  if(!bank){ showToast('Enter a bank name'); return; }
+  const btn=document.getElementById('addAccBtn2');
+  btn.disabled=true; btn.textContent='Saving…';
+  setSyncStatus('syncing');
+  try {
+    const row={id:Date.now(),bank,type,last4,currency};
+    const res=await db('accounts','POST',row);
+    accounts.push(res[0]||row);
+    populateAccountSelects();
+    document.getElementById('accBank2').value='';
+    document.getElementById('accLast42').value='';
+    showToast('✓ Account added');
+    renderAccounts();
+    document.getElementById('accCount').textContent=accounts.length;
     setSyncStatus('');
   } catch(e){ showToast('⚠️ Error saving'); setSyncStatus('error'); }
   btn.disabled=false; btn.textContent='Add Account';
