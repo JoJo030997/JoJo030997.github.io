@@ -422,6 +422,27 @@ input:checked+.toggle-slider::before{transform:translateX(20px);background:#0a0a
         <div class="field-label">Cloud Sync</div>
         <div style="font-size:13px;color:var(--muted);line-height:1.7;margin-top:4px">Your data is saved to Supabase cloud. It will be available on any device and will never be lost.</div>
       </div>
+
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin:8px 16px 8px;">Accounts</div>
+      <div class="card">
+        <div class="field-label">Add Account</div>
+        <div class="field-group" style="margin-top:8px"><input class="field-input" type="text" id="accBank" placeholder="e.g. BAM, Banrural, Chase, PayPal…"></div>
+        <div class="field-group">
+          <select class="field-select full" id="accType">
+            <option value="Checking">Checking</option><option value="Savings">Savings</option>
+            <option value="Credit Card">Credit Card</option><option value="Cash">Cash</option>
+            <option value="Digital Wallet">Digital Wallet</option><option value="Investment">Investment</option><option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="field-group"><input class="field-input" type="number" id="accLast4" placeholder="Last 4 digits (optional)" inputmode="numeric"></div>
+        <div class="field-group">
+          <select class="field-select full" id="accCurrency"><option value="USD">USD $</option><option value="GTQ">GTQ Q</option></select>
+        </div>
+        <button class="submit-btn" id="addAccBtn" onclick="addAccount()">Add Account</button>
+      </div>
+
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin:8px 16px 8px;">My Accounts</div>
+      <div id="accountsList"><div class="empty" style="margin:0 16px">No accounts yet. Add your banks above.</div></div>
     </div>
 
     <!-- ADVISOR -->
@@ -646,6 +667,8 @@ function goSettings() {
   document.getElementById('accCount').textContent=accounts.length;
   document.getElementById('entryCount').textContent=entries.length;
   document.getElementById('billCount').textContent=bills.length;
+  document.getElementById('rateDisplay').textContent=`Current: 1 USD = ${settings.rate.toFixed(2)} GTQ`;
+  renderAccounts();
 }
 
 // ── FORM HELPERS ──────────────────────────────────────────────────────────────
