@@ -948,7 +948,7 @@ function getAnalysis() {
   const goalPct=goalUSD&&goalUSD>0?Math.min(100,balUSD/goalUSD*100):null;
   const usdInc=income.filter(e=>e.currency==='USD').reduce((s,e)=>s+e.amount,0);
   const gtqInc=income.filter(e=>e.currency==='GTQ').reduce((s,e)=>s+e.amount,0);
-  return {totalIncUSD,totalExpUSD,balUSD,sr,cats,sortedCats,topCat,goalUSD,goalPct,usdInc,gtqInc,hasData:entries.length>0,entryCount:entries.length};
+  return {totalIncUSD,totalExpUSD,balUSD,sr,cats,sortedCats,topCat,goalUSD,goalPct,usdInc,gtqInc,hasData:entries.length>0||bills.length>0||accounts.length>0,entryCount:entries.length};
 }
 
 function mq(q,kws){ return kws.some(k=>q.includes(k)); }
@@ -956,7 +956,7 @@ function mq(q,kws){ return kws.some(k=>q.includes(k)); }
 function getResponse(input) {
   const d=getAnalysis();
   const q=input.toLowerCase().trim();
-  if(!d.hasData) return `No data yet! Add income and expenses using the ＋ tab, then come back for personalized advice.`;
+  if(!d.hasData) return `No data yet! Start by adding accounts in ⚙ Settings, then add income/expenses in the ＋ tab or bills in the 📋 tab.`;
   if(mq(q,['hi','hello','hey','hola','help'])) return greetR(d);
   if(mq(q,['how much','save','saving','savings rate'])) return saveR(d);
   if(mq(q,['overspend','where is my money','top expense','biggest'])) return overspendR(d);
@@ -970,13 +970,20 @@ function getResponse(input) {
   if(mq(q,['balance','left over','remaining'])) return balR(d);
   if(mq(q,['emergency','rainy day','safety net'])) return emR(d);
   if(mq(q,['debt','loan','owe','pay off'])) return debtR(d);
-  if(mq(q,['bill','bills','upcoming','due'])) return billsR(d);
-  if(mq(q,['account','bank'])) return accsR(d);
-  if(mq(q,['summary','everything','full picture'])) return sumR(d);
+  if(mq(q,['bill','bills','upcoming','due','autopay','payment','payments','recurring'])) return billsR(d);
+  if(mq(q,['account','bank','banks','accounts','wallet'])) return accsR(d);
+  if(mq(q,['summary','everything','full picture','show me','overview','all'])) return sumR(d);
   return `I might not have a specific answer for that. Try asking:\n• "How much should I save?"\n• "Where am I overspending?"\n• "Give me a budget plan"\n• "Am I on track?"\n• "Full financial summary"`;
 }
 
-function greetR(d){ return `Hey! I'm your financial advisor. I can see ${d.entryCount} entries this month with a ${d.sr.toFixed(1)}% savings rate.\n\nAsk me anything — savings advice, budget plans, investing tips, or just "full summary" to see everything at once!`; }
+function greetR(d){
+  let parts=[];
+  if(d.entryCount>0) parts.push(`${d.entryCount} entries, ${d.sr.toFixed(1)}% savings rate`);
+  if(bills.length>0) parts.push(`${bills.length} bills tracked`);
+  if(accounts.length>0) parts.push(`${accounts.length} account${accounts.length>1?'s':''}`);
+  const summary=parts.length?parts.join(', '):'some data added';
+  return `Hey! I'm your financial advisor. I can see ${summary}.\n\nAsk me anything — bills, accounts, savings advice, budget plans, or just "full summary" to see everything at once!`;
+}
 function saveR(d){
   if(!d.totalIncUSD) return `No income recorded yet. Add your salary in the ＋ tab!`;
   if(d.sr>=20) return `You're saving ${d.sr.toFixed(1)}% — above the 20% target! Current savings: ${fU(d.balUSD)}/month.\n\nNext: build an emergency fund of ${fU(d.totalExpUSD*4)}, then start investing.`;
@@ -1072,14 +1079,25 @@ function accsR(d){
   return r;
 }
 function sumR(d){
-  if(!d.hasData) return `No data yet!`;
-  const status=d.sr>=20?'🟢 Strong':d.sr>=10?'🟡 Moderate':'🔴 Needs work';
-  let r=`${status}\n\n💰 Income: ${fU(d.totalIncUSD)}\n💸 Expenses: ${fU(d.totalExpUSD)}\n📊 Balance: ${d.balUSD>=0?'+':''}${fU(d.balUSD)}\n📈 Savings Rate: ${d.sr.toFixed(1)}%\n`;
-  if(goal) r+=`🎯 Goal: ${Math.max(0,d.goalPct||0).toFixed(0)}%\n`;
-  if(d.topCat) r+=`\nTop expense: ${d.topCat[0]} (${fU(d.topCat[1])})\n`;
-  if(accounts.length) r+=`Accounts: ${accounts.length}\n`;
-  if(bills.length) r+=`Bills: ${fU(bills.reduce((s,b)=>s+mEquiv(b),0))}/month\n`;
-  r+=`\n${d.sr>=20?'Great — invest your surplus.':d.sr>=10?'Push savings to 20%.':'Get expenses below income first.'}`;
+  if(!d.hasData) return `No data yet — add accounts, entries or bills to get started!`;
+  let r='';
+  if(d.entryCount>0){
+    const status=d.sr>=20?'🟢 Strong':d.sr>=10?'🟡 Moderate':'🔴 Needs work';
+    r+=`${status}\n\n💰 Income: ${fU(d.totalIncUSD)}\n💸 Expenses: ${fU(d.totalExpUSD)}\n📊 Balance: ${d.balUSD>=0?'+':''}${fU(d.balUSD)}\n📈 Savings Rate: ${d.sr.toFixed(1)}%\n`;
+    if(goal) r+=`🎯 Goal: ${Math.max(0,d.goalPct||0).toFixed(0)}%\n`;
+    if(d.topCat) r+=`Top expense: ${d.topCat[0]} (${fU(d.topCat[1])})\n`;
+  } else r+=`No income/expenses yet — add them in ＋\n`;
+  if(accounts.length){
+    r+=`\n🏦 Accounts (${accounts.length}):\n`;
+    accounts.forEach(a=>{ const bal=getAccBal(a.id); r+=`• ${accLbl(a)}: ${bal>=0?'+':''}${fU(bal)}\n`; });
+  }
+  if(bills.length){
+    const monthly=bills.reduce((s,b)=>s+mEquiv(b),0);
+    const urgent=bills.filter(b=>!b.paid&&daysUntil(b)<=5);
+    r+=`\n📋 Bills (${bills.length}): ${fU(monthly)}/month\n`;
+    if(urgent.length) r+=`⚠️ Due soon: ${urgent.map(b=>b.name).join(', ')}\n`;
+  }
+  if(d.entryCount>0) r+=`\n${d.sr>=20?'Great — invest your surplus.':d.sr>=10?'Push savings to 20%.':'Get expenses below income first.'}`;
   return r;
 }
 
@@ -1141,9 +1159,15 @@ function chipAsk(t){ document.getElementById('chatInput').value=t; sendMsg(); }
 function initAdvisor(){
   const area=document.getElementById('chatArea'); if(!area||area.children.length>0) return;
   const d=getAnalysis();
-  const msg=d.hasData?`Hey! I can see your finances — ${fU(d.totalIncUSD)} income, ${fU(d.totalExpUSD)} expenses, ${d.sr.toFixed(1)}% savings rate. What would you like to know?`:`Hey! Add some income and expenses using the ＋ tab, then I'll give you personalized advice!`;
+  let parts=[];
+  if(d.entryCount>0) parts.push(`${fU(d.totalIncUSD)} income, ${fU(d.totalExpUSD)} expenses`);
+  if(bills.length>0) parts.push(`${bills.length} bills`);
+  if(accounts.length>0) parts.push(`${accounts.length} account${accounts.length>1?'s':''}`);
+  const msg=parts.length>0
+    ?`Hey! I can see your data — ${parts.join(', ')}. What would you like to know?`
+    :`Hey! I don't see any data yet. Add income, expenses, bills or accounts and I'll give you personalized advice!`;
   addMsg(msg,'ai');
-  renderChips(['How much should I save?','Am I on track?','Budget plan','Full summary']);
+  renderChips(['How much should I save?','Am I on track?','Tell me about my bills','Full summary']);
 }
 
 // ── VISIBILITY CHANGE ─────────────────────────────────────────────────────────
