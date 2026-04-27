@@ -575,9 +575,9 @@ async function loadAll() {
     entries  = ents || [];
     bills    = bls  || [];
     goal     = (goals && goals.length) ? goals[0] : null;
-    if (setts && setts.length) settings = setts[0];
+    if (setts && setts.length) settings = { ...settings, ...setts[0] };
     setSyncStatus('');
-    checkMonthReset();
+    await checkMonthReset();
     populateAccountSelects();
     document.getElementById('curUSD').classList.toggle('active', settings.display_currency==='USD');
     document.getElementById('curGTQ').classList.toggle('active', settings.display_currency==='GTQ');
@@ -1390,14 +1390,21 @@ function initAdvisor() {
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 document.addEventListener('visibilitychange', ()=>{
-  if(document.visibilityState==='visible') { loadAll().then(()=>{ render(); checkReminders(); }); }
+  if(document.visibilityState==='visible') {
+    loadAll().then(()=>{ render(); checkReminders(); });
+  }
 });
 
 loadAll().then(()=>{
   document.getElementById('loadingScreen').style.display='none';
   document.getElementById('appShell').style.display='flex';
   render();
+  renderAccounts();
   checkReminders();
+}).catch(()=>{
+  document.getElementById('loadingScreen').style.display='none';
+  document.getElementById('appShell').style.display='flex';
+  showToast('⚠️ Could not connect — check your internet');
 });
 </script>
 </body>
