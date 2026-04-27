@@ -289,6 +289,7 @@ input:checked+.tslider::before{transform:translateX(20px);background:#0a0a0a;}
             <optgroup label="Expenses"><option>Food & Dining</option><option>Housing / Rent</option><option>Transport</option><option>Health</option><option>Entertainment</option><option>Clothing</option><option>Education</option><option>Utilities</option><option>Subscriptions</option><option>Other</option></optgroup>
           </select>
         </div>
+        <div class="fg"><div class="fl">Date</div><input class="fi" type="date" id="inDate"></div>
         <button class="sbtn" onclick="addEntry()">Add Entry</button>
       </div>
       <div class="card" style="margin-top:0"><div style="font-size:12px;color:var(--muted);line-height:1.6">Don't see your account? Add it in ⚙ Settings first.</div></div>
@@ -308,7 +309,8 @@ input:checked+.tslider::before{transform:translateX(20px);background:#0a0a0a;}
         <div class="fg"><div class="fl">Amount & Currency</div>
           <div class="fr"><input class="fi" type="number" id="billAmt" placeholder="0.00" inputmode="decimal"><select class="fs" id="billCur" style="width:100px"><option value="USD">USD $</option><option value="GTQ">GTQ Q</option></select></div>
         </div>
-        <div class="fg"><div class="fl">Due Day of Month</div><input class="fi" type="number" id="billDay" placeholder="e.g. 15" min="1" max="31" inputmode="numeric"></div>
+        <div class="fg"><div class="fl">Due Day of Month</div><input class="fi" type="number" id="billDay" placeholder="e.g. 15 (recurring day)" min="1" max="31" inputmode="numeric"></div>
+        <div class="fg" id="billFullDateFg" style="display:none"><div class="fl">Due Date</div><input class="fi" type="date" id="billFullDate"></div>
         <div class="fg"><div class="fl">Frequency</div>
           <div class="freq-row">
             <button class="fb active" data-freq="monthly" onclick="setFreq(this)">Monthly</button>
@@ -461,6 +463,7 @@ input:checked+.tslider::before{transform:translateX(20px);background:#0a0a0a;}
           <optgroup label="Expenses"><option>Food & Dining</option><option>Housing / Rent</option><option>Transport</option><option>Health</option><option>Entertainment</option><option>Clothing</option><option>Education</option><option>Utilities</option><option>Subscriptions</option><option>Other</option></optgroup>
         </select>
       </div>
+      <div class="fg"><div class="fl">Date</div><input class="fi" type="date" id="editDate"></div>
       <input type="hidden" id="editId">
       <button class="sbtn" onclick="saveEdit()">Save Changes</button>
       <button onclick="closeEdit()" class="cancel-btn">Cancel</button>
@@ -571,21 +574,36 @@ function populateSelects() {
 
 // ── BILLS LOGIC ───────────────────────────────────────────────────────────────
 function daysUntil(bill) {
-  const today=new Date();
+  const today=new Date(); today.setHours(0,0,0,0);
+  if (bill.freq==='once' && bill.fullDate) {
+    const due=new Date(bill.fullDate+'T00:00:00');
+    return Math.ceil((due-today)/(1000*60*60*24));
+  }
   let due=new Date(today.getFullYear(),today.getMonth(),bill.day);
   if(due<=today) due=new Date(today.getFullYear(),today.getMonth()+1,bill.day);
   return Math.ceil((due-today)/(1000*60*60*24));
 }
-function dueStatus(d){ return d<=3?'urgent':d<=7?'soon':'ok'; }
+
+function dueStatus(d){ return d<=0?'urgent':d<=3?'urgent':d<=7?'soon':'ok'; }
+
 function dueLabel(bill){
   if(bill.paid) return '✓ Paid this month';
   const d=daysUntil(bill);
+  if (bill.freq==='once' && bill.fullDate) {
+    const due=new Date(bill.fullDate+'T00:00:00');
+    const dateStr=due.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+    if(d<0) return `Overdue! (was ${dateStr})`;
+    if(d===0) return `Due today! (${dateStr})`;
+    if(d===1) return `Due tomorrow (${dateStr})`;
+    if(d<=7) return `Due in ${d} days (${dateStr})`;
+    return `Due ${dateStr}`;
+  }
   if(d===0) return 'Due today!';
   if(d===1) return 'Due tomorrow!';
   if(d<=3) return `Due in ${d} days ⚠️`;
   if(d<=7) return `Due in ${d} days`;
   const s=['th','st','nd','rd'],v=bill.day%100;
-  return `Due on the ${bill.day}${s[(v-20)%10]||s[v]||s[0]}`;
+  return `Due on the ${bill.day}${s[(v-20)%10]||s[v]||s[0]} of each month`;
 }
 function mEquiv(bill){
   const a=toUSD(bill.amount,bill.currency);
@@ -629,9 +647,31 @@ function setFreq(el) {
   billFreq=el.dataset.freq;
   document.querySelectorAll('.fb').forEach(b=>b.classList.remove('active'));
   el.classList.add('active');
+  updateBillDateFields();
 }
+
+function updateBillDateFields() {
+  const autopay = document.getElementById('billAutopay').checked;
+  const isRecurring = billFreq === 'monthly' || billFreq === 'weekly' || billFreq === 'yearly';
+  const dayFg = document.getElementById('billDay').parentElement;
+  const fullDateFg = document.getElementById('billFullDateFg');
+  // Autopay = always day of month only (recurring by definition)
+  // Non-autopay recurring = day of month
+  // One-time = full date
+  if (billFreq === 'once') {
+    dayFg.style.display = 'none';
+    fullDateFg.style.display = 'block';
+  } else {
+    dayFg.style.display = 'block';
+    fullDateFg.style.display = 'none';
+    document.getElementById('billDay').placeholder = autopay ? 'Day autopay charges (e.g. 15)' : 'Due day each month (e.g. 15)';
+  }
+}
+
 function toggleAP() {
-  document.getElementById('apDetails').style.display=document.getElementById('billAutopay').checked?'block':'none';
+  const checked = document.getElementById('billAutopay').checked;
+  document.getElementById('apDetails').style.display = checked ? 'block' : 'none';
+  updateBillDateFields();
 }
 
 // ── ACCOUNT ───────────────────────────────────────────────────────────────────
@@ -670,13 +710,17 @@ function addEntry() {
   const currency=document.getElementById('inCur').value;
   const accountId=parseInt(document.getElementById('inAcc').value)||null;
   const category=document.getElementById('inCat').value||(entryType==='income'?'Other Income':'Other');
+  const dateVal=document.getElementById('inDate').value;
+  const date=dateVal ? new Date(dateVal+'T12:00:00').toISOString() : new Date().toISOString();
   if(!desc){ showToast('Add a description'); return; }
   if(!amount||amount<=0){ showToast('Add a valid amount'); return; }
   const acc=accounts.find(a=>a.id===accountId);
-  entries.unshift({id:Date.now(),type:entryType,description:desc,amount,currency,accountId,accountLabel:acc?accLbl(acc):'',category,date:new Date().toISOString()});
+  entries.unshift({id:Date.now(),type:entryType,description:desc,amount,currency,accountId,accountLabel:acc?accLbl(acc):'',category,date});
   save();
   document.getElementById('inDesc').value='';
   document.getElementById('inAmt').value='';
+  // reset date to today
+  document.getElementById('inDate').value=new Date().toISOString().slice(0,10);
   showToast(entryType==='income'?'✓ Income added':'✓ Expense added');
   goTo('overview');
 }
@@ -693,6 +737,7 @@ function openEdit(id) {
   document.getElementById('editAmt').value=e.amount;
   document.getElementById('editCur').value=e.currency;
   document.getElementById('editCat').value=e.category;
+  document.getElementById('editDate').value=e.date?e.date.slice(0,10):new Date().toISOString().slice(0,10);
   populateSelects();
   if(e.accountId) document.getElementById('editAcc').value=e.accountId;
   document.getElementById('editPopup').classList.add('show');
@@ -706,11 +751,13 @@ function saveEdit() {
   const currency=document.getElementById('editCur').value;
   const accountId=parseInt(document.getElementById('editAcc').value)||null;
   const category=document.getElementById('editCat').value;
+  const dateVal=document.getElementById('editDate').value;
   if(!desc){ showToast('Add a description'); return; }
   if(!amount||amount<=0){ showToast('Add a valid amount'); return; }
   const acc=accounts.find(a=>a.id===accountId);
   e.description=desc; e.amount=amount; e.currency=currency;
   e.accountId=accountId; e.accountLabel=acc?accLbl(acc):''; e.category=category;
+  if(dateVal) e.date=new Date(dateVal+'T12:00:00').toISOString();
   save(); closeEdit(); render(); showToast('✓ Entry updated');
 }
 
@@ -721,22 +768,34 @@ function addBill() {
   const name=document.getElementById('billName').value.trim();
   const amount=parseFloat(document.getElementById('billAmt').value);
   const currency=document.getElementById('billCur').value;
-  const day=parseInt(document.getElementById('billDay').value);
   const category=document.getElementById('billCat').value;
   const accountId=parseInt(document.getElementById('billAcc').value)||null;
   const autopay=document.getElementById('billAutopay').checked;
   const last4=autopay?document.getElementById('billLast4').value.trim():'';
+  const acc=accounts.find(a=>a.id===accountId);
+
+  let day=null, fullDate=null;
+  if (billFreq==='once') {
+    fullDate=document.getElementById('billFullDate').value;
+    if(!fullDate){ showToast('Select a due date'); return; }
+    day=new Date(fullDate).getDate();
+  } else {
+    day=parseInt(document.getElementById('billDay').value);
+    if(!day||day<1||day>31){ showToast('Enter a valid day (1-31)'); return; }
+  }
+
   if(!name){ showToast('Enter a bill name'); return; }
   if(!amount||amount<=0){ showToast('Enter a valid amount'); return; }
-  if(!day||day<1||day>31){ showToast('Enter a valid day (1-31)'); return; }
-  const acc=accounts.find(a=>a.id===accountId);
-  bills.push({id:Date.now(),name,amount,currency,day,freq:billFreq,category,accountId,accountLabel:acc?accLbl(acc):'',autopay,last4,paid:false});
+
+  bills.push({id:Date.now(),name,amount,currency,day,fullDate,freq:billFreq,category,accountId,accountLabel:acc?accLbl(acc):'',autopay,last4,paid:false});
   save();
   document.getElementById('billName').value='';
   document.getElementById('billAmt').value='';
   document.getElementById('billDay').value='';
+  document.getElementById('billFullDate').value='';
   document.getElementById('billAutopay').checked=false;
   document.getElementById('apDetails').style.display='none';
+  updateBillDateFields();
   showToast('✓ Bill added'); renderBills();
 }
 
@@ -953,27 +1012,118 @@ function getAnalysis() {
 
 function mq(q,kws){ return kws.some(k=>q.includes(k)); }
 
+let lastTopic = null;
+
+function detectCur(q) {
+  if (mq(q,['in usd','in dollars','in dollar','en dolares','en dólares'])) return 'USD';
+  if (mq(q,['in gtq','in quetzal','in quetzales','en quetzales','en q ','in q ','in quetzals'])) return 'GTQ';
+  return 'BOTH';
+}
+
+function fBoth(usdAmt) {
+  const g = usdAmt * rate;
+  return `$${Math.abs(usdAmt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} USD / Q${Math.abs(g).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})} GTQ`;
+}
+
+function fCur(usdAmt, cur) {
+  if (cur==='USD') return '$'+Math.abs(usdAmt).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' USD';
+  if (cur==='GTQ') return 'Q'+Math.abs(usdAmt*rate).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2})+' GTQ';
+  return fBoth(usdAmt);
+}
+
+function detectScenario(q) {
+  const cutM = q.match(/what if i (?:cut|remove|stop|cancel|eliminate|reduce|drop) (.+?)(?:\?|$)/i);
+  if (cutM) return { type:'cut', item: cutM[1].trim() };
+  const earnM = q.match(/what if i (?:earn|make|get|receive|had|have) (?:an? )?(?:extra )?(\$?q?[\d,]+)/i);
+  if (earnM) return { type:'earn', amount: parseFloat(earnM[1].replace(/[$,q]/gi,'')) };
+  const saveM = q.match(/what if i save (?:an? extra )?(\$?q?[\d,]+)/i);
+  if (saveM) return { type:'save', amount: parseFloat(saveM[1].replace(/[$,q]/gi,'')) };
+  return null;
+}
+
+function scenarioR(d, s, cur) {
+  if (s.type==='cut') {
+    const item = s.item.toLowerCase();
+    const bill = bills.find(b=>b.name.toLowerCase().includes(item)||item.includes(b.name.toLowerCase()));
+    const catE = Object.entries(d.cats).find(([c])=>c.toLowerCase().includes(item)||item.includes(c.toLowerCase()));
+    if (bill) {
+      const saved=toUSD(bill.amount,bill.currency);
+      const newBal=d.balUSD+saved, newSr=d.totalIncUSD>0?(newBal/d.totalIncUSD*100):0;
+      return `If you cancel ${bill.name} (${fCur(saved,cur)}/month):\n\n• New monthly balance: ${fCur(newBal,cur)}\n• New savings rate: ${newSr.toFixed(1)}%\n• Annual savings: ${fCur(saved*12,cur)}\n\n${newSr>=20?'✓ That would put you above the 20% savings target!':'Still below 20% — look for more cuts.'}`;
+    }
+    if (catE) {
+      const [cat,amt]=catE;
+      return `If you cut your ${cat} spending:\n\n✂️ Cut 20% → save ${fCur(amt*0.20,cur)}/month (${fCur(amt*0.20*12,cur)}/year)\n✂️ Cut 50% → save ${fCur(amt*0.50,cur)}/month (${fCur(amt*0.50*12,cur)}/year)\n\nAt 50% cut your new savings rate: ${d.totalIncUSD>0?((d.balUSD+amt*0.50)/d.totalIncUSD*100).toFixed(1):0}%`;
+    }
+    return `I couldn't find "${s.item}" in your bills or expense categories. Check the exact names in the Bills tab or Insights.`;
+  }
+  if (s.type==='earn') {
+    const extra=s.amount, newInc=d.totalIncUSD+extra, newBal=d.balUSD+extra, newSr=newInc>0?(newBal/newInc*100):0;
+    return `If you earned ${fCur(extra,cur)} more per month:\n\n• New income: ${fCur(newInc,cur)}/month\n• New balance: ${fCur(newBal,cur)}/month\n• New savings rate: ${newSr.toFixed(1)}%\n• Extra per year: ${fCur(extra*12,cur)}\n\n${newSr>=20?'✓ You would hit the 20% savings target!':`Still ${(20-newSr).toFixed(1)}% below 20% target.`}`;
+  }
+  if (s.type==='save') {
+    const extra=s.amount;
+    if (!goal) return `Set a savings goal in the Insights tab first, then I can calculate how much faster you'd reach it!`;
+    const rem=Math.max(0,d.goalUSD-Math.max(0,d.balUSD));
+    const mNow=d.balUSD>0?rem/d.balUSD:Infinity;
+    const mNew=(d.balUSD+extra)>0?rem/(d.balUSD+extra):Infinity;
+    return `If you saved ${fCur(extra,cur)} extra per month:\n\n• Current pace: ${isFinite(mNow)?mNow.toFixed(1)+' months to goal':'not on track'}\n• New pace: ${isFinite(mNew)?mNew.toFixed(1)+' months to goal':'still not on track'}\n• Time saved: ${mNow-mNew>0?(mNow-mNew).toFixed(1)+' months faster':'same pace'}\n• New monthly savings: ${fCur(d.balUSD+extra,cur)}`;
+  }
+}
+
 function getResponse(input) {
   const d=getAnalysis();
   const q=input.toLowerCase().trim();
-  if(!d.hasData) return `No data yet! Start by adding accounts in ⚙ Settings, then add income/expenses in the ＋ tab or bills in the 📋 tab.`;
-  if(mq(q,['hi','hello','hey','hola','help'])) return greetR(d);
-  if(mq(q,['how much','save','saving','savings rate'])) return saveR(d);
-  if(mq(q,['overspend','where is my money','top expense','biggest'])) return overspendR(d);
-  if(mq(q,['budget','50/30/20','plan my'])) return budgetR(d);
-  if(mq(q,['invest','investing','grow my money'])) return investR(d);
-  if(mq(q,['on track','am i ok','overall','health','how am i doing'])) return overallR(d);
-  if(mq(q,['goal','target','reach my goal','how long'])) return goalR(d);
-  if(mq(q,['reduce','cut','lower','spend less','5 ways'])) return cutR(d);
-  if(mq(q,['usd','gtq','quetzal','currency','exchange'])) return currR(d);
-  if(mq(q,['income','earn','salary'])) return incR(d);
-  if(mq(q,['balance','left over','remaining'])) return balR(d);
-  if(mq(q,['emergency','rainy day','safety net'])) return emR(d);
-  if(mq(q,['debt','loan','owe','pay off'])) return debtR(d);
-  if(mq(q,['bill','bills','upcoming','due','autopay','payment','payments','recurring'])) return billsR(d);
-  if(mq(q,['account','bank','banks','accounts','wallet'])) return accsR(d);
-  if(mq(q,['summary','everything','full picture','show me','overview','all'])) return sumR(d);
-  return `I might not have a specific answer for that. Try asking:\n• "How much should I save?"\n• "Where am I overspending?"\n• "Give me a budget plan"\n• "Am I on track?"\n• "Full financial summary"`;
+  const cur=detectCur(q);
+
+  if (!d.hasData) return `No data yet! Start by adding accounts in ⚙ Settings, then income/expenses in ＋ or bills in 📋.`;
+
+  if (mq(q,['what if','what would','if i cut','if i earn','if i save','si yo'])) {
+    const s=detectScenario(q);
+    if (s) { lastTopic='scenario'; return scenarioR(d,s,cur); }
+  }
+
+  if (mq(q,['hi','hello','hey','hola','help','what can you','que puedes'])) { lastTopic='greet'; return greetR(d); }
+  if (mq(q,['how much to save','how much should i save','savings rate','should i save','saving goal'])) { lastTopic='save'; return saveR(d,cur); }
+  if (mq(q,['overspend','where is my money','where am i spending','top expense','biggest expense','most expensive','spending the most'])) { lastTopic='overspend'; return overspendR(d,cur); }
+  if (mq(q,['budget','50/30/20','503020','budget plan','distribute my','how to distribute'])) { lastTopic='budget'; return budgetR(d,cur); }
+  if (mq(q,['invest','investing','investment','grow my money','stock','fund','where to put my','where should i put'])) { lastTopic='invest'; return investR(d,cur); }
+  if (mq(q,['on track','am i ok','overall','financial health','how am i doing','assess me','score','rate me'])) { lastTopic='overall'; return overallR(d,cur); }
+  if (mq(q,['goal','target','reach my goal','how long','when will i reach','how far'])) { lastTopic='goal'; return goalR(d,cur); }
+  if (mq(q,['reduce','cut expenses','lower expenses','decrease','trim','spend less','ways to save','how to save more'])) { lastTopic='cut'; return cutR(d,cur); }
+  if (mq(q,['exchange rate','convert','conversion','gtq to usd','usd to gtq','rate is','what is the rate'])) { lastTopic='currency'; return currR(d); }
+  if (mq(q,['my income','total income','how much do i earn','how much do i make','salary','ingresos'])) { lastTopic='income'; return incR(d,cur); }
+  if (mq(q,['my balance','balance is','left over','leftover','remaining','net','how much left','how much do i have'])) { lastTopic='balance'; return balR(d,cur); }
+  if (mq(q,['emergency fund','rainy day','safety net','cushion','fondo de emergencia'])) { lastTopic='emergency'; return emR(d,cur); }
+  if (mq(q,['debt','loan','owe','pay off','credit card debt','deuda'])) { lastTopic='debt'; return debtR(d,cur); }
+  if (mq(q,['bill','bills','upcoming','due','autopay','automatic payment','recurring','subscri','pagos','facturas','how much are my bills','total bills'])) { lastTopic='bills'; return billsR(d,cur); }
+  if (mq(q,['my account','my accounts','bank','banks','accounts','wallet','cuentas','how much in'])) { lastTopic='accounts'; return accsR(d,cur); }
+  if (mq(q,['summary','everything','full picture','show me everything','overview','all my','resumen','total financial'])) { lastTopic='summary'; return sumR(d,cur); }
+
+  // Specific bill lookup by name
+  const billMatch=bills.find(b=>q.includes(b.name.toLowerCase()));
+  if (billMatch) {
+    const saved=toUSD(billMatch.amount,billMatch.currency);
+    return `${billMatch.name}:\n• Amount: ${fCur(saved,cur)}\n• Status: ${billMatch.paid?'✓ Paid this month':dueLabel(billMatch)}\n• Frequency: ${billMatch.freq}\n• Category: ${billMatch.category}${billMatch.accountLabel?`\n• Paid from: ${billMatch.accountLabel}`:''}${billMatch.autopay?`\n• Autopay: ····${billMatch.last4}`:''}`;
+  }
+
+  // Specific account lookup by bank name
+  const accMatch=accounts.find(a=>q.includes(a.bank.toLowerCase()));
+  if (accMatch) {
+    const bal=getAccBal(accMatch.id);
+    const expA=entries.filter(e=>e.type==='expense'&&e.accountId===accMatch.id).reduce((s,e)=>s+toUSD(e.amount,e.currency),0);
+    const incA=entries.filter(e=>e.type==='income'&&e.accountId===accMatch.id).reduce((s,e)=>s+toUSD(e.amount,e.currency),0);
+    const linkedBills=bills.filter(b=>b.accountId===accMatch.id);
+    return `${accMatch.bank}${accMatch.last4?` ····${accMatch.last4}`:''}:\n• Type: ${accMatch.type}\n• Balance: ${fCur(bal,cur)}\n• Income received: ${fCur(incA,cur)}\n• Expenses paid: ${fCur(expA,cur)}${linkedBills.length?`\n• Bills linked: ${linkedBills.map(b=>b.name).join(', ')}` :''}`;
+  }
+
+  // Context-aware follow-ups
+  if (lastTopic==='bills'&&mq(q,['how much','total','cost','all'])) return billsR(d,cur);
+  if (lastTopic==='save'&&mq(q,['more','extra','increase','boost'])) return `To boost savings from ${d.sr.toFixed(1)}% to 20%, you need ${fCur(d.totalIncUSD*0.20-d.balUSD,cur)} more/month.\n\nTry: "what if I cut ${d.topCat?d.topCat[0]:'[category]'}?"`;
+  if (lastTopic==='overall'&&mq(q,['fix','improve','what should i','how do i','tips'])) return cutR(d,cur);
+  if (lastTopic==='cut'&&mq(q,['more','else','other','another'])) return `Other ways to save:\n• Negotiate your internet/phone plan\n• Buy groceries in bulk\n• Use cooperativas for better savings rates\n• Cancel subscriptions you haven't used in 30 days\n• Cook at home for at least 5 days a week`;
+
+  return `I'm not sure about that one. You can ask me:\n• "What if I cancel Netflix?" (scenario)\n• "Tell me about my bills in GTQ"\n• "Full summary in USD"\n• "How long to reach my goal?"\n• "Am I on track?"\n• Or just type the name of a bill or bank!`;
 }
 
 function greetR(d){
@@ -981,123 +1131,168 @@ function greetR(d){
   if(d.entryCount>0) parts.push(`${d.entryCount} entries, ${d.sr.toFixed(1)}% savings rate`);
   if(bills.length>0) parts.push(`${bills.length} bills tracked`);
   if(accounts.length>0) parts.push(`${accounts.length} account${accounts.length>1?'s':''}`);
-  const summary=parts.length?parts.join(', '):'some data added';
-  return `Hey! I'm your financial advisor. I can see ${summary}.\n\nAsk me anything — bills, accounts, savings advice, budget plans, or just "full summary" to see everything at once!`;
+  const summary=parts.length?parts.join(' · '):'nothing added yet';
+  return `Hey! I'm your financial advisor. I can see: ${summary}.\n\nNew: I now show amounts in both USD and GTQ! Try:\n• "Full summary in GTQ"\n• "What if I cancel [bill name]?"\n• "Tell me about my bills"\n• "How long to reach my goal?"\n• "Am I on track?"`;
 }
-function saveR(d){
+function saveR(d,cur='BOTH'){
   if(!d.totalIncUSD) return `No income recorded yet. Add your salary in the ＋ tab!`;
-  if(d.sr>=20) return `You're saving ${d.sr.toFixed(1)}% — above the 20% target! Current savings: ${fU(d.balUSD)}/month.\n\nNext: build an emergency fund of ${fU(d.totalExpUSD*4)}, then start investing.`;
-  if(d.sr>=10) return `You're saving ${d.sr.toFixed(1)}% — decent but below 20%. Gap: ${fU(d.totalIncUSD*0.20-d.balUSD)}/month.${d.topCat?` Your top expense is ${d.topCat[0]} at ${fU(d.topCat[1])} — start there.`:''}`;
-  if(d.sr>0) return `Savings rate is only ${d.sr.toFixed(1)}% — below 10% minimum. Target at least ${fU(d.totalIncUSD*0.10)}/month.${d.topCat?`\nBiggest expense: ${d.topCat[0]} at ${fU(d.topCat[1])}. Cut 20% = ${fU(d.topCat[1]*0.20)}/month saved.`:''}`;
-  return `You're spending more than you earn. Fix this first.${d.topCat?`\nTop expense: ${d.topCat[0]} at ${fU(d.topCat[1])}.`:''}`;
+  if(d.sr>=20) return `You're saving ${d.sr.toFixed(1)}% — above the 20% target! ✓\n\nMonthly savings: ${fCur(d.balUSD,cur)}\nAnnual savings: ${fCur(d.balUSD*12,cur)}\n\nNext step: build an emergency fund of ${fCur(d.totalExpUSD*4,cur)}, then start investing.`;
+  if(d.sr>=10) return `Saving ${d.sr.toFixed(1)}% — decent but below 20%.\n\nCurrent: ${fCur(d.balUSD,cur)}/month\nTarget (20%): ${fCur(d.totalIncUSD*0.20,cur)}/month\nGap: ${fCur(d.totalIncUSD*0.20-d.balUSD,cur)}/month\n\n${d.topCat?`Try: "what if I cut ${d.topCat[0]}?" to see the impact.`:''}`;
+  if(d.sr>0) return `Savings rate only ${d.sr.toFixed(1)}% — below 10% minimum.\n\nTarget: ${fCur(d.totalIncUSD*0.10,cur)}/month minimum\n${d.topCat?`\nTop expense: ${d.topCat[0]} at ${fCur(d.topCat[1],cur)}\nCut 20% → save ${fCur(d.topCat[1]*0.20,cur)}/month`:''}`;
+  return `Spending more than you earn!\nDeficit: ${fCur(Math.abs(d.balUSD),cur)}/month\n${d.topCat?`Top expense: ${d.topCat[0]} at ${fCur(d.topCat[1],cur)}`:''}`;
 }
-function overspendR(d){
-  if(!d.sortedCats.length) return `No expenses yet. Add them in the ＋ tab!`;
+function overspendR(d,cur='BOTH'){
+  if(!d.sortedCats.length) return `No expenses yet. Add them in ＋ tab!`;
   let r=`Where your money goes:\n\n`;
-  d.sortedCats.slice(0,3).forEach(([cat,amt],i)=>{
+  d.sortedCats.slice(0,5).forEach(([cat,amt],i)=>{
     const pct=d.totalExpUSD>0?(amt/d.totalExpUSD*100).toFixed(0):0;
-    r+=`${i+1}. ${cat}: ${fU(amt)} (${pct}%)${pct>50?' ⚠️':pct>30?' — watch this':''}\n`;
+    r+=`${i+1}. ${cat}: ${fCur(amt,cur)} (${pct}%)${pct>50?' ⚠️ very high':pct>30?' — watch this':''}\n`;
   });
-  if(d.sr<10) r+=`\nSavings rate is low. Cutting ${d.sortedCats[0][0]} by 20% saves ${fU(d.sortedCats[0][1]*0.20)}/month.`;
+  r+=`\nTotal: ${fCur(d.totalExpUSD,cur)}/month`;
+  if(d.topCat) r+=`\n\nTip: Try "what if I cut ${d.topCat[0]}?" to see the impact.`;
   return r;
 }
-function budgetR(d){
-  if(!d.totalIncUSD) return `Add your income first!`;
-  return `50/30/20 budget for ${fU(d.totalIncUSD)}/month:\n\n🏠 Needs (50%): ${fU(d.totalIncUSD*0.50)}\nRent, food, utilities, transport\n\n🎉 Wants (30%): ${fU(d.totalIncUSD*0.30)}\nEntertainment, dining, clothing\n\n💰 Savings (20%): ${fU(d.totalIncUSD*0.20)}\nEmergency fund, investments\n\n${d.totalExpUSD>0?`You currently save ${d.sr.toFixed(1)}% — ${d.sr>=20?'on track! ✓':'target is 20%.'}` : ''}`;
+function budgetR(d,cur='BOTH'){
+  if(!d.totalIncUSD) return `Add your income first in ＋ tab!`;
+  return `50/30/20 budget for ${fCur(d.totalIncUSD,cur)}/month:\n\n🏠 Needs (50%): ${fCur(d.totalIncUSD*0.50,cur)}\nRent, food, utilities, transport\n\n🎉 Wants (30%): ${fCur(d.totalIncUSD*0.30,cur)}\nEntertainment, dining, clothing\n\n💰 Savings (20%): ${fCur(d.totalIncUSD*0.20,cur)}\nEmergency fund, investments\n\n${d.totalExpUSD>0?`Reality: spending ${fCur(d.totalExpUSD,cur)}, saving ${d.sr.toFixed(1)}% — ${d.sr>=20?'on track! ✓':'need '+fCur(d.totalIncUSD*0.20-d.balUSD,cur)+' more/month'}` : ''}`;
 }
-function investR(d){
-  if(d.balUSD<=0) return `You need a positive balance before investing. Fix your budget first.`;
-  return `With ${fU(d.balUSD)}/month available:\n\n1. Emergency fund first 🛡️\n   Build ${fU(d.totalExpUSD*3)}–${fU(d.totalExpUSD*6)}\n\n2. Local (Guatemala) 🇬🇹\n   • Cooperativas\n   • Bank CDs (3%+ interest)\n\n3. International 🌍\n   • Interactive Brokers\n   • Index funds (VOO, VTI)\n   • Start with $50/month\n\n4. Keep savings in USD 💱`;
+function investR(d,cur='BOTH'){
+  if(d.balUSD<=0) return `Need a positive balance to invest. Currently: ${fCur(d.balUSD,cur)}/month. Fix your budget first.`;
+  return `With ${fCur(d.balUSD,cur)}/month surplus:\n\n1. Emergency fund first 🛡️\n   Target: ${fCur(d.totalExpUSD*3,cur)} – ${fCur(d.totalExpUSD*6,cur)}\n\n2. Local (Guatemala) 🇬🇹\n   • Cooperativas (4-6% interest)\n   • Bank certificates of deposit\n   • Savings accounts 3%+\n\n3. International 🌍\n   • Interactive Brokers (accepts GT)\n   • Index funds: VOO, VTI\n   • Start with $50/month\n\n4. Strategy 💱\n   Keep GTQ for local expenses, invest in USD for stability.`;
 }
-function overallR(d){
+function overallR(d,cur='BOTH'){
   let score=0,pos=[],neg=[];
-  if(d.sr>=20){score+=3;pos.push(`Savings rate ${d.sr.toFixed(1)}% ✓`);}
-  else if(d.sr>=10){score+=1;neg.push(`Savings rate ${d.sr.toFixed(1)}% — below 20%`);}
-  else neg.push(`Savings rate ${d.sr.toFixed(1)}% — critically low`);
-  if(d.balUSD>0){score+=2;pos.push(`Positive balance ${fU(d.balUSD)} ✓`);}
-  else neg.push(`Negative balance`);
-  if(goal){if(d.goalPct>=100){score+=2;pos.push(`Goal reached! ✓`);}else if(d.goalPct>=50){score+=1;pos.push(`${d.goalPct.toFixed(0)}% toward goal ✓`);}else neg.push(`Only ${d.goalPct?d.goalPct.toFixed(0):0}% toward goal`);}
+  if(d.entryCount>0){
+    if(d.sr>=20){score+=3;pos.push(`Savings rate ${d.sr.toFixed(1)}% ✓`);}
+    else if(d.sr>=10){score+=1;neg.push(`Savings rate ${d.sr.toFixed(1)}% — below 20% (gap: ${fCur(d.totalIncUSD*0.20-d.balUSD,cur)}/mo)`);}
+    else neg.push(`Savings rate ${d.sr.toFixed(1)}% — critically low`);
+    if(d.balUSD>0){score+=2;pos.push(`Positive balance ${fCur(d.balUSD,cur)}/month ✓`);}
+    else neg.push(`Negative balance: ${fCur(d.balUSD,cur)}/month`);
+  }
+  if(goal){if(d.goalPct>=100){score+=2;pos.push(`Savings goal reached! ✓`);}else if(d.goalPct>=50){score+=1;pos.push(`${d.goalPct.toFixed(0)}% toward goal ✓`);}else neg.push(`Only ${d.goalPct?d.goalPct.toFixed(0):0}% toward goal`);}
   else neg.push(`No savings goal set`);
+  const urgBills=bills.filter(b=>!b.paid&&daysUntil(b)<=3);
+  if(urgBills.length) neg.push(`${urgBills.length} bill${urgBills.length>1?'s':''} due very soon: ${urgBills.map(b=>b.name).join(', ')}`);
+  if(accounts.length>0){score+=1;pos.push(`${accounts.length} account${accounts.length>1?'s':''} tracked ✓`);}
+  else neg.push(`No bank accounts set up`);
   const r=score>=6?'🟢 Strong':score>=3?'🟡 Moderate':'🔴 Needs work';
   let res=`Financial Health: ${r}\n\n`;
   if(pos.length) res+=`Doing well:\n${pos.map(p=>`• ${p}`).join('\n')}\n\n`;
   if(neg.length) res+=`Fix:\n${neg.map(n=>`• ${n}`).join('\n')}\n\n`;
-  res+=score>=6?`Invest your surplus.`:score>=3?`Push savings toward 20%.`:`Get expenses below income first.`;
+  res+=score>=6?`Invest your surplus — type "invest" for tips.`:score>=3?`Push savings toward 20%. Try "what if I cut [expense]?"`:`Get expenses below income first. Type "cut expenses" for specific tips.`;
   return res;
 }
-function goalR(d){
-  if(!goal) return `No goal set. Go to Insights tab to set one!`;
-  const rem=d.goalUSD-Math.max(0,d.balUSD);
-  let r=`Goal: ${sym(goal.currency)}${goal.amount} — Progress: ${Math.max(0,d.goalPct||0).toFixed(0)}%\n\n`;
-  if(d.goalPct>=100) return r+`🎉 Goal reached! Set a new one.`;
-  if(d.balUSD<=0) return r+`Negative balance — reduce expenses first.`;
-  r+=`At ${fU(d.balUSD)}/month: ~${(rem/d.balUSD).toFixed(1)} months to reach goal.`;
+function goalR(d,cur='BOTH'){
+  if(!goal) return `No goal set yet. Go to the Insights tab and tap Set!`;
+  const rem=Math.max(0,d.goalUSD-Math.max(0,d.balUSD));
+  let r=`🎯 Goal: ${fCur(d.goalUSD,cur)}\n✓ Saved: ${fCur(Math.max(0,d.balUSD),cur)} (${Math.max(0,d.goalPct||0).toFixed(0)}%)\n⬜ Remaining: ${fCur(rem,cur)}\n\n`;
+  if(d.goalPct>=100) return r+`🎉 Goal reached! Set a new higher goal.`;
+  if(d.balUSD<=0) return r+`Monthly balance is negative — reduce expenses to make progress.`;
+  const months=rem/d.balUSD;
+  r+=`At ${fCur(d.balUSD,cur)}/month savings:\n→ Reach goal in ~${months.toFixed(1)} months\n\n`;
+  r+=months>12?`Over a year away. Try "what if I save $X more?" to speed it up.`:months>3?`Good pace — stay consistent!`:`Almost there! Keep going.`;
   return r;
 }
-function cutR(d){
-  if(!d.sortedCats.length) return `Add expenses first!`;
-  let r=`Cut from ${fU(d.totalExpUSD)}/month:\n\n`;
+function cutR(d,cur='BOTH'){
+  if(!d.sortedCats.length) return `No expenses recorded yet. Add them in ＋ tab!`;
+  let r=`Cut from ${fCur(d.totalExpUSD,cur)}/month:\n\n`;
   d.sortedCats.slice(0,4).forEach(([cat,amt],i)=>{
     const c=cat.toLowerCase();
-    let tip=c.includes('food')||c.includes('dining')?'Cook at home, limit dining out 2x/week.':c.includes('entertainment')?'Audit subscriptions, use free options.':c.includes('transport')?'Consolidate errands, carpool.':c.includes('subscription')?'Cancel unused subscriptions.':'Cut by 20%.';
-    r+=`${i+1}. ${cat} (${fU(amt)})\n${tip}\n\n`;
+    const tip=c.includes('food')||c.includes('dining')?'Cook at home, limit dining out to 2x/week.':c.includes('entertainment')?'Audit subscriptions, cancel unused ones.':c.includes('transport')?'Consolidate errands, carpool when possible.':c.includes('subscription')?'Check your bank for recurring charges.':'Review and target 20% reduction.';
+    r+=`${i+1}. ${cat} — ${fCur(amt,cur)}\n   ${tip}\n   20% cut = ${fCur(amt*0.20,cur)}/month saved\n\n`;
   });
-  return r+`Cutting 20% across these saves ${fU(d.sortedCats.slice(0,4).reduce((s,[,v])=>s+v*0.20,0))}/month.`;
+  const total20=d.sortedCats.slice(0,4).reduce((s,[,v])=>s+v*0.20,0);
+  r+=`If you cut 20% across all of these:\n→ Save ${fCur(total20,cur)}/month\n→ ${fCur(total20*12,cur)}/year\n\nTip: "What if I cut [specific category]?" for exact impact!`;
+  return r;
 }
 function currR(d){
-  return `USD + GTQ strategy:\n\n📌 Rate: 1 USD = ${rate} GTQ\n\n1. GTQ for local expenses\n2. Save & invest in USD\n3. Don't convert USD unless needed\n4. Convert GTQ to USD when rate is favorable`;
+  return `Exchange rate:\n📌 1 USD = ${rate} GTQ\n\nYour finances converted:\n• Income: $${d.totalIncUSD.toFixed(2)} = Q${(d.totalIncUSD*rate).toFixed(2)}\n• Expenses: $${d.totalExpUSD.toFixed(2)} = Q${(d.totalExpUSD*rate).toFixed(2)}\n• Balance: $${d.balUSD.toFixed(2)} = Q${(d.balUSD*rate).toFixed(2)}\n\nTip: Update the rate in ⚙ Settings → Exchange Rate.`;
 }
-function incR(d){
-  if(!d.totalIncUSD) return `No income yet. Add it in the ＋ tab!`;
-  let r=`Income: ${fU(d.totalIncUSD)}/month\n`;
-  if(d.usdInc>0) r+=`• USD: ${fU(d.usdInc)}\n`;
-  if(d.gtqInc>0) r+=`• GTQ: Q${d.gtqInc.toFixed(2)} (≈${fU(d.gtqInc/rate)})\n`;
-  r+=`\nAfter expenses: ${fU(d.balUSD)} — ${d.sr.toFixed(1)}% savings rate.`;
+function incR(d,cur='BOTH'){
+  if(!d.totalIncUSD) return `No income recorded yet. Add it in ＋ tab!`;
+  let r=`Monthly income: ${fCur(d.totalIncUSD,cur)}\n`;
+  if(d.usdInc>0) r+=`• USD income: $${d.usdInc.toFixed(2)}\n`;
+  if(d.gtqInc>0) r+=`• GTQ income: Q${d.gtqInc.toFixed(2)} (≈${fCur(d.gtqInc/rate,cur)})\n`;
+  r+=`\nAfter ${fCur(d.totalExpUSD,cur)} in expenses:\n→ Balance: ${fCur(d.balUSD,cur)}\n→ Savings rate: ${d.sr.toFixed(1)}%\n→ Annual income: ${fCur(d.totalIncUSD*12,cur)}`;
   return r;
 }
-function balR(d){
-  if(!d.totalIncUSD&&!d.totalExpUSD) return `No data yet!`;
-  let r=`Balance: ${d.balUSD>=0?'+':''}${fU(d.balUSD)} ${d.balUSD>=0?'✓':'⚠️'}\n\nIncome: +${fU(d.totalIncUSD)}\nExpenses: -${fU(d.totalExpUSD)}\n\n`;
-  return r+(d.balUSD>0?`${fU(d.balUSD)} available to save or invest.`:d.balUSD===0?`Breaking even — find small cuts.`:`${fU(Math.abs(d.balUSD))} over budget. Review expenses.`);
+function balR(d,cur='BOTH'){
+  if(!d.totalIncUSD&&!d.totalExpUSD) return `No data yet! Add income and expenses in ＋ tab.`;
+  let r=`Balance: ${fCur(d.balUSD,cur)} ${d.balUSD>=0?'✓':'⚠️'}\n\nIncome:   +${fCur(d.totalIncUSD,cur)}\nExpenses: -${fCur(d.totalExpUSD,cur)}\nNet:       ${d.balUSD>=0?'+':''}${fCur(d.balUSD,cur)}\n\n`;
+  if(d.balUSD>0) r+=`${fCur(d.balUSD,cur)} available to save or invest.`;
+  else if(d.balUSD===0) r+=`Breaking even — find small cuts to create a positive balance.`;
+  else r+=`${fCur(Math.abs(d.balUSD),cur)} over budget. Type "cut expenses" for tips.`;
+  return r;
 }
-function emR(d){
-  return `Emergency fund target:\n• 3 months: ${fU(d.totalExpUSD*3)}\n• 6 months: ${fU(d.totalExpUSD*6)}\n\n${d.balUSD>0?`At ${fU(d.balUSD)}/month savings:\n• 3 months in: ${(d.totalExpUSD*3/d.balUSD).toFixed(1)} months\n• 6 months in: ${(d.totalExpUSD*6/d.balUSD).toFixed(1)} months\n\n`:''}Keep in a liquid savings account — not invested.`;
+function emR(d,cur='BOTH'){
+  if(!d.totalExpUSD) return `Add your expenses first so I can calculate your emergency fund target!`;
+  let r=`Emergency fund targets:\n• 3 months: ${fCur(d.totalExpUSD*3,cur)}\n• 6 months (recommended): ${fCur(d.totalExpUSD*6,cur)}\n\n`;
+  if(d.balUSD>0) r+=`At ${fCur(d.balUSD,cur)}/month savings:\n• 3-month fund in: ${(d.totalExpUSD*3/d.balUSD).toFixed(1)} months\n• 6-month fund in: ${(d.totalExpUSD*6/d.balUSD).toFixed(1)} months\n\n`;
+  r+=`Keep it in a liquid savings account. This is protection, not investment.`;
+  return r;
 }
-function debtR(d){ return `Track debt payments as expenses in ＋ tab.\n\nDebt strategy:\n1. Pay minimums on all\n2. Attack highest interest rate first\n3. Roll paid-off payments to next debt\n\nWith ${fU(d.balUSD)}/month: split ${fU(d.balUSD*0.5)} to debt + ${fU(d.balUSD*0.5)} to savings.`; }
-function billsR(d){
-  if(!bills.length) return `No bills added. Go to the 📋 Bills tab!`;
+function debtR(d,cur='BOTH'){
+  return `Add debt payments as regular expenses in ＋ tab to track them.\n\nDebt strategy:\n1. Pay minimums on everything\n2. Attack highest interest rate first\n3. Roll each paid-off payment to next debt\n\n${d.balUSD>0?`With ${fCur(d.balUSD,cur)}/month surplus:\n→ ${fCur(d.balUSD*0.5,cur)} toward debt\n→ ${fCur(d.balUSD*0.5,cur)} to emergency savings`:'Get to a positive monthly balance first.'}`;
+}
+function billsR(d,cur='BOTH'){
+  if(!bills.length) return `No bills added. Go to the 📋 Bills tab to add your recurring payments!`;
   const urgent=bills.filter(b=>!b.paid&&daysUntil(b)<=5);
+  const paid2=bills.filter(b=>b.paid);
   const monthly=bills.reduce((s,b)=>s+mEquiv(b),0);
-  let r=`${bills.length} bills · ${fU(monthly)}/month total\n\n`;
-  if(urgent.length) r+=`⚠️ Due soon:\n${urgent.map(b=>`• ${b.name} — ${dueLabel(b)}`).join('\n')}\n\n`;
-  return r+`Make sure you have ${fU(monthly)} available each month.`;
+  const yearly=bills.reduce((s,b)=>{const a=toUSD(b.amount,b.currency);return s+(b.freq==='monthly'?a*12:b.freq==='weekly'?a*52:b.freq==='yearly'?a:0);},0);
+  const ap=bills.filter(b=>b.autopay);
+  let r=`Your ${bills.length} bills:\n\n`;
+  r+=`💰 Monthly total: ${fCur(monthly,cur)}\n`;
+  r+=`📅 Yearly total: ${fCur(yearly,cur)}\n`;
+  if(ap.length) r+=`⚡ Autopay: ${ap.length} bill${ap.length>1?'s':''} (${ap.map(b=>b.name).join(', ')})\n`;
+  if(paid2.length) r+=`✓ Paid this month: ${paid2.length}\n`;
+  if(urgent.length){r+=`\n⚠️ Due soon:\n`;urgent.forEach(b=>r+=`• ${b.name} — ${dueLabel(b)} · ${fCur(toUSD(b.amount,b.currency),cur)}\n`);}
+  r+=`\nAll bills:\n`;
+  [...bills].sort((a,b)=>daysUntil(a)-daysUntil(b)).forEach(b=>{
+    r+=`• ${b.name}: ${fCur(toUSD(b.amount,b.currency),cur)} — ${b.paid?'✓ paid':dueLabel(b)}\n`;
+  });
+  return r;
 }
-function accsR(d){
+function accsR(d,cur='BOTH'){
   if(!accounts.length) return `No accounts yet. Add them in ⚙ Settings!`;
   let r=`Your ${accounts.length} account${accounts.length>1?'s':''}:\n\n`;
-  accounts.forEach(a=>{ const bal=getAccBal(a.id); r+=`• ${accIco(a.type)} ${accLbl(a)}: ${bal>=0?'+':''}${fU(bal)}\n`; });
+  accounts.forEach(a=>{
+    const bal=getAccBal(a.id);
+    const expA=entries.filter(e=>e.type==='expense'&&e.accountId===a.id).reduce((s,e)=>s+toUSD(e.amount,e.currency),0);
+    const incA=entries.filter(e=>e.type==='income'&&e.accountId===a.id).reduce((s,e)=>s+toUSD(e.amount,e.currency),0);
+    const lb=bills.filter(b=>b.accountId===a.id);
+    r+=`${accIco(a.type)} ${accLbl(a)} (${a.type})\n`;
+    r+=`   Balance: ${fCur(bal,cur)}\n`;
+    if(incA>0) r+=`   Income in: ${fCur(incA,cur)}\n`;
+    if(expA>0) r+=`   Expenses out: ${fCur(expA,cur)}\n`;
+    if(lb.length) r+=`   Bills: ${lb.map(b=>b.name).join(', ')}\n`;
+    r+=`\n`;
+  });
+  const totalBal=accounts.reduce((s,a)=>s+getAccBal(a.id),0);
+  r+=`Total across all accounts: ${fCur(totalBal,cur)}`;
   return r;
 }
-function sumR(d){
+function sumR(d,cur='BOTH'){
   if(!d.hasData) return `No data yet — add accounts, entries or bills to get started!`;
   let r='';
   if(d.entryCount>0){
     const status=d.sr>=20?'🟢 Strong':d.sr>=10?'🟡 Moderate':'🔴 Needs work';
-    r+=`${status}\n\n💰 Income: ${fU(d.totalIncUSD)}\n💸 Expenses: ${fU(d.totalExpUSD)}\n📊 Balance: ${d.balUSD>=0?'+':''}${fU(d.balUSD)}\n📈 Savings Rate: ${d.sr.toFixed(1)}%\n`;
-    if(goal) r+=`🎯 Goal: ${Math.max(0,d.goalPct||0).toFixed(0)}%\n`;
-    if(d.topCat) r+=`Top expense: ${d.topCat[0]} (${fU(d.topCat[1])})\n`;
-  } else r+=`No income/expenses yet — add them in ＋\n`;
+    r+=`${status}\n💰 Income: ${fCur(d.totalIncUSD,cur)}\n💸 Expenses: ${fCur(d.totalExpUSD,cur)}\n📊 Balance: ${fCur(d.balUSD,cur)}\n📈 Savings Rate: ${d.sr.toFixed(1)}%\n`;
+    if(goal) r+=`🎯 Goal: ${Math.max(0,d.goalPct||0).toFixed(0)}% (${fCur(Math.max(0,(d.goalUSD||0)-d.balUSD),cur)} to go)\n`;
+    if(d.topCat) r+=`Top expense: ${d.topCat[0]} at ${fCur(d.topCat[1],cur)}\n`;
+  } else r+=`No income/expenses yet — add in ＋\n`;
   if(accounts.length){
-    r+=`\n🏦 Accounts (${accounts.length}):\n`;
-    accounts.forEach(a=>{ const bal=getAccBal(a.id); r+=`• ${accLbl(a)}: ${bal>=0?'+':''}${fU(bal)}\n`; });
+    r+=`\n🏦 Accounts:\n`;
+    accounts.forEach(a=>{const bal=getAccBal(a.id);r+=`• ${accLbl(a)}: ${fCur(bal,cur)}\n`;});
   }
   if(bills.length){
     const monthly=bills.reduce((s,b)=>s+mEquiv(b),0);
-    const urgent=bills.filter(b=>!b.paid&&daysUntil(b)<=5);
-    r+=`\n📋 Bills (${bills.length}): ${fU(monthly)}/month\n`;
-    if(urgent.length) r+=`⚠️ Due soon: ${urgent.map(b=>b.name).join(', ')}\n`;
+    const urg=bills.filter(b=>!b.paid&&daysUntil(b)<=5);
+    r+=`\n📋 Bills: ${fCur(monthly,cur)}/month`;
+    if(urg.length) r+=`\n⚠️ Due soon: ${urg.map(b=>b.name).join(', ')}`;
+    r+=`\n`;
   }
-  if(d.entryCount>0) r+=`\n${d.sr>=20?'Great — invest your surplus.':d.sr>=10?'Push savings to 20%.':'Get expenses below income first.'}`;
+  if(d.entryCount>0) r+=`\n${d.sr>=20?'Great — invest your surplus.':d.sr>=10?'Push savings to 20%.':'Priority: get expenses below income.'}`;
   return r;
 }
 
@@ -1186,7 +1381,9 @@ document.addEventListener('visibilitychange',()=>{
 // ── INIT ──────────────────────────────────────────────────────────────────────
 document.getElementById('curUSD').classList.toggle('active', dispCur==='USD');
 document.getElementById('curGTQ').classList.toggle('active', dispCur==='GTQ');
+document.getElementById('inDate').value = new Date().toISOString().slice(0,10);
 populateSelects();
+updateBillDateFields();
 checkReminders();
 render();
 </script>
