@@ -237,8 +237,9 @@ input:checked+.toggle-slider::before{transform:translateX(20px);background:#0a0a
 <!-- LOADING SCREEN -->
 <div class="loading-screen" id="loadingScreen">
   <div class="loading-logo">MyFinance</div>
-  <div class="loading-spinner"></div>
-  <div class="loading-text">Loading your data…</div>
+  <div class="loading-spinner" id="loadingSpinner"></div>
+  <div class="loading-text" id="loadingText">Loading your data…</div>
+  <button id="retryBtn" onclick="initApp()" style="display:none;margin-top:16px;padding:12px 28px;background:var(--accent);color:#0a0a0a;border:none;border-radius:99px;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:500;cursor:pointer;">Try Again</button>
 </div>
 
 <div class="app-shell" id="appShell" style="display:none">
@@ -251,6 +252,7 @@ input:checked+.toggle-slider::before{transform:translateX(20px);background:#0a0a
     </div>
     <div class="nav-right">
       <div class="sync-dot" id="syncDot" title="Sync status"></div>
+      <button onclick="manualRefresh()" style="background:none;border:none;color:var(--muted);font-size:16px;cursor:pointer;padding:4px 6px;" title="Refresh data">↻</button>
       <div class="settings-btn" onclick="goSettings()">⚙</div>
     </div>
   </div>
@@ -1389,23 +1391,49 @@ function initAdvisor() {
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+async function manualRefresh() {
+  setSyncStatus('syncing');
+  showToast('Refreshing…');
+  try {
+    await loadAll();
+    render();
+    renderAccounts();
+    checkReminders();
+    showToast('✓ Data refreshed');
+  } catch(e) {
+    setSyncStatus('error');
+    showToast('⚠️ Could not connect');
+  }
+}
+
+async function initApp() {
+  const spinner = document.getElementById('loadingSpinner');
+  const text = document.getElementById('loadingText');
+  const retryBtn = document.getElementById('retryBtn');
+  spinner.style.display = 'block';
+  text.textContent = 'Loading your data…';
+  retryBtn.style.display = 'none';
+  try {
+    await loadAll();
+    document.getElementById('loadingScreen').style.display = 'none';
+    document.getElementById('appShell').style.display = 'flex';
+    render();
+    renderAccounts();
+    checkReminders();
+  } catch(e) {
+    spinner.style.display = 'none';
+    text.textContent = 'Could not connect to Supabase.';
+    retryBtn.style.display = 'block';
+  }
+}
+
 document.addEventListener('visibilitychange', ()=>{
   if(document.visibilityState==='visible') {
-    loadAll().then(()=>{ render(); checkReminders(); });
+    manualRefresh();
   }
 });
 
-loadAll().then(()=>{
-  document.getElementById('loadingScreen').style.display='none';
-  document.getElementById('appShell').style.display='flex';
-  render();
-  renderAccounts();
-  checkReminders();
-}).catch(()=>{
-  document.getElementById('loadingScreen').style.display='none';
-  document.getElementById('appShell').style.display='flex';
-  showToast('⚠️ Could not connect — check your internet');
-});
+initApp();
 </script>
 </body>
 </html>
