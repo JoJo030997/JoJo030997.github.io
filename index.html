@@ -471,6 +471,74 @@ input:checked+.tslider::before{transform:translateX(20px);background:#0a0a0a;}
   </div>
 </div>
 
+<!-- EDIT BILL POPUP -->
+<div class="popup-overlay" id="editBillPopup">
+  <div class="popup-sheet" style="overflow-y:auto;max-height:90dvh">
+    <div class="ph"></div>
+    <div class="pt2">Edit Bill</div>
+    <div style="margin-top:14px">
+      <div class="fg"><div class="fl">Bill Name</div><input class="fi" type="text" id="editBillName"></div>
+      <div class="fg"><div class="fl">Amount & Currency</div>
+        <div class="fr"><input class="fi" type="number" id="editBillAmt" inputmode="decimal"><select class="fs" id="editBillCur" style="width:100px"><option value="USD">USD $</option><option value="GTQ">GTQ Q</option></select></div>
+      </div>
+      <div class="fg" id="editBillDayFg"><div class="fl">Due Day of Month</div><input class="fi" type="number" id="editBillDay" min="1" max="31" inputmode="numeric"></div>
+      <div class="fg" id="editBillFullDateFg" style="display:none"><div class="fl">Due Date</div><input class="fi" type="date" id="editBillFullDate"></div>
+      <div class="fg"><div class="fl">Frequency</div>
+        <div class="freq-row">
+          <button class="fb edit-fb active" data-freq="monthly" onclick="editBillFreq=this.dataset.freq;document.querySelectorAll('.edit-fb').forEach(b=>b.classList.remove('active'));this.classList.add('active');updateEditBillDateFields()">Monthly</button>
+          <button class="fb edit-fb" data-freq="weekly" onclick="editBillFreq=this.dataset.freq;document.querySelectorAll('.edit-fb').forEach(b=>b.classList.remove('active'));this.classList.add('active');updateEditBillDateFields()">Weekly</button>
+          <button class="fb edit-fb" data-freq="yearly" onclick="editBillFreq=this.dataset.freq;document.querySelectorAll('.edit-fb').forEach(b=>b.classList.remove('active'));this.classList.add('active');updateEditBillDateFields()">Yearly</button>
+          <button class="fb edit-fb" data-freq="once" onclick="editBillFreq=this.dataset.freq;document.querySelectorAll('.edit-fb').forEach(b=>b.classList.remove('active'));this.classList.add('active');updateEditBillDateFields()">One-time</button>
+        </div>
+      </div>
+      <div class="fg"><div class="fl">Account</div><select class="fs full" id="editBillAcc"><option value="">— Select account —</option></select></div>
+      <div class="fg"><div class="fl">Category</div>
+        <select class="fs full" id="editBillCat">
+          <option value="Housing">Housing / Rent</option><option value="Utilities">Utilities</option>
+          <option value="Subscriptions">Subscriptions</option><option value="Insurance">Insurance</option>
+          <option value="Transport">Transport</option><option value="Health">Health</option>
+          <option value="Education">Education</option><option value="Food">Food</option><option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="trow">
+        <span class="tlbl">Autopay</span>
+        <label class="tswitch"><input type="checkbox" id="editBillAutopay" onchange="document.getElementById('editBillAPDetails').style.display=this.checked?'block':'none'"><span class="tslider"></span></label>
+      </div>
+      <div id="editBillAPDetails" style="display:none">
+        <div class="fg"><div class="fl">Card Last 4 Digits</div><input class="fi" type="number" id="editBillLast4" inputmode="numeric"></div>
+      </div>
+      <input type="hidden" id="editBillId">
+      <button class="sbtn" onclick="saveEditBill()">Save Bill</button>
+      <button onclick="closeEditBill()" class="cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT ACCOUNT POPUP -->
+<div class="popup-overlay" id="editAccPopup">
+  <div class="popup-sheet">
+    <div class="ph"></div>
+    <div class="pt2">Edit Account</div>
+    <div style="margin-top:14px">
+      <div class="fg"><div class="fl">Bank / Institution Name</div><input class="fi" type="text" id="editAccBank"></div>
+      <div class="fg"><div class="fl">Account Type</div>
+        <select class="fs full" id="editAccType">
+          <option value="Checking">Checking</option><option value="Savings">Savings</option>
+          <option value="Credit Card">Credit Card</option><option value="Cash">Cash</option>
+          <option value="Digital Wallet">Digital Wallet</option><option value="Investment">Investment</option><option value="Other">Other</option>
+        </select>
+      </div>
+      <div class="fg"><div class="fl">Last 4 Digits (optional)</div><input class="fi" type="number" id="editAccLast4" inputmode="numeric"></div>
+      <div class="fg"><div class="fl">Currency</div>
+        <select class="fs full" id="editAccCur"><option value="USD">USD $</option><option value="GTQ">GTQ Q</option></select>
+      </div>
+      <input type="hidden" id="editAccId">
+      <button class="sbtn" onclick="saveEditAccount()">Save Account</button>
+      <button onclick="closeEditAccount()" class="cancel-btn">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -483,6 +551,7 @@ let rate     = parseFloat(localStorage.getItem('mf_rate')     || '7.8');
 let dispCur  = localStorage.getItem('mf_cur') || 'USD';
 let entryType = 'income';
 let billFreq  = 'monthly';
+let editBillFreq = 'monthly';
 let isTyping  = false;
 
 // ── UTILS ─────────────────────────────────────────────────────────────────────
@@ -763,6 +832,98 @@ function saveEdit() {
 
 function closeEdit(){ document.getElementById('editPopup').classList.remove('show'); }
 
+// ── EDIT BILL ─────────────────────────────────────────────────────────────────
+function openEditBill(id) {
+  const b=bills.find(x=>x.id===id); if(!b) return;
+  document.getElementById('editBillId').value=id;
+  document.getElementById('editBillName').value=b.name;
+  document.getElementById('editBillAmt').value=b.amount;
+  document.getElementById('editBillCur').value=b.currency;
+  document.getElementById('editBillDay').value=b.day||'';
+  document.getElementById('editBillFullDate').value=b.fullDate||'';
+  document.getElementById('editBillCat').value=b.category;
+  document.getElementById('editBillAutopay').checked=b.autopay||false;
+  document.getElementById('editBillLast4').value=b.last4||'';
+  document.getElementById('editBillAPDetails').style.display=b.autopay?'block':'none';
+  // freq buttons
+  document.querySelectorAll('.edit-fb').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.freq===b.freq);
+  });
+  editBillFreq=b.freq||'monthly';
+  updateEditBillDateFields();
+  populateSelects();
+  document.getElementById('editBillAcc').value=b.accountId||'';
+  document.getElementById('editBillPopup').classList.add('show');
+}
+
+function updateEditBillDateFields() {
+  const dayFg=document.getElementById('editBillDayFg');
+  const fullFg=document.getElementById('editBillFullDateFg');
+  if(editBillFreq==='once'){ dayFg.style.display='none'; fullFg.style.display='block'; }
+  else { dayFg.style.display='block'; fullFg.style.display='none'; }
+}
+
+function saveEditBill() {
+  const id=parseInt(document.getElementById('editBillId').value);
+  const b=bills.find(x=>x.id===id); if(!b) return;
+  const name=document.getElementById('editBillName').value.trim();
+  const amount=parseFloat(document.getElementById('editBillAmt').value);
+  const currency=document.getElementById('editBillCur').value;
+  const category=document.getElementById('editBillCat').value;
+  const accountId=parseInt(document.getElementById('editBillAcc').value)||null;
+  const autopay=document.getElementById('editBillAutopay').checked;
+  const last4=autopay?document.getElementById('editBillLast4').value.trim():'';
+  let day=null, fullDate=null;
+  if(editBillFreq==='once'){
+    fullDate=document.getElementById('editBillFullDate').value;
+    if(!fullDate){ showToast('Select a due date'); return; }
+    day=new Date(fullDate).getDate();
+  } else {
+    day=parseInt(document.getElementById('editBillDay').value);
+    if(!day||day<1||day>31){ showToast('Enter a valid day (1-31)'); return; }
+  }
+  if(!name){ showToast('Enter a bill name'); return; }
+  if(!amount||amount<=0){ showToast('Enter a valid amount'); return; }
+  const acc=accounts.find(a=>a.id===accountId);
+  b.name=name; b.amount=amount; b.currency=currency; b.day=day;
+  b.fullDate=fullDate; b.freq=editBillFreq; b.category=category;
+  b.accountId=accountId; b.accountLabel=acc?accLbl(acc):'';
+  b.autopay=autopay; b.last4=last4;
+  save(); closeEditBill(); renderBills(); showToast('✓ Bill updated');
+}
+
+function closeEditBill(){ document.getElementById('editBillPopup').classList.remove('show'); }
+
+// ── EDIT ACCOUNT ──────────────────────────────────────────────────────────────
+function openEditAccount(id) {
+  const a=accounts.find(x=>x.id===id); if(!a) return;
+  document.getElementById('editAccId').value=id;
+  document.getElementById('editAccBank').value=a.bank;
+  document.getElementById('editAccType').value=a.type;
+  document.getElementById('editAccLast4').value=a.last4||'';
+  document.getElementById('editAccCur').value=a.currency;
+  document.getElementById('editAccPopup').classList.add('show');
+}
+
+function saveEditAccount() {
+  const id=parseInt(document.getElementById('editAccId').value);
+  const a=accounts.find(x=>x.id===id); if(!a) return;
+  const bank=document.getElementById('editAccBank').value.trim();
+  const type=document.getElementById('editAccType').value;
+  const last4=document.getElementById('editAccLast4').value.trim();
+  const currency=document.getElementById('editAccCur').value;
+  if(!bank){ showToast('Enter a bank name'); return; }
+  a.bank=bank; a.type=type; a.last4=last4; a.currency=currency;
+  // update account labels in entries and bills
+  const newLabel=accLbl(a);
+  entries.forEach(e=>{ if(e.accountId===id) e.accountLabel=newLabel; });
+  bills.forEach(b=>{ if(b.accountId===id) b.accountLabel=newLabel; });
+  save(); populateSelects(); closeEditAccount(); renderAccounts(); render();
+  showToast('✓ Account updated');
+}
+
+function closeEditAccount(){ document.getElementById('editAccPopup').classList.remove('show'); }
+
 // ── BILL ──────────────────────────────────────────────────────────────────────
 function addBill() {
   const name=document.getElementById('billName').value.trim();
@@ -864,7 +1025,7 @@ function renderAccounts() {
     el.innerHTML=accounts.map(a=>{
       const bal=getAccBal(a.id);
       const dispBal=dispCur==='USD'?bal:bal*rate;
-      return `<div class="ac"><div class="aic">${accIco(a.type)}</div><div class="ab"><div class="abank">${a.bank}${a.last4?` ····${a.last4}`:''}</div><div class="adet">${a.type} · ${a.currency}</div></div><div class="abal"><div class="abalv ${bal>=0?'pos':'neg'}">${bal>=0?'+':''}${fmtD(dispBal)}</div><div class="abalc">${dispCur} equiv.</div></div><button class="adel" onclick="deleteAccount(${a.id})">×</button></div>`;
+      return `<div class="ac"><div class="aic">${accIco(a.type)}</div><div class="ab"><div class="abank">${a.bank}${a.last4?` ····${a.last4}`:''}</div><div class="adet">${a.type} · ${a.currency}</div></div><div class="abal"><div class="abalv ${bal>=0?'pos':'neg'}">${bal>=0?'+':''}${fmtD(dispBal)}</div><div class="abalc">${dispCur} equiv.</div></div><button class="edit-btn" onclick="openEditAccount(${a.id})">✎</button><button class="adel" onclick="deleteAccount(${a.id})">×</button></div>`;
     }).join('');
   }
   const oa=document.getElementById('ovAccounts');
@@ -894,7 +1055,7 @@ function renderBills() {
     const d=b.paid?0:daysUntil(b),s=b.paid?'paid':dueStatus(d),l=dueLabel(b);
     const btag=b.accountLabel?`<span class="btag">🏦 ${b.accountLabel}</span>`:'';
     const aptag=b.autopay?`<span class="aptag">⚡ Autopay${b.last4?` ····${b.last4}`:''}</span>`:'';
-    return `<div class="bi"><div class="bd ${s}">${billIco(b.category)}</div><div class="bb"><div class="bname">${b.name}</div><div class="bmeta">${b.category} · ${b.freq}</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${btag}${aptag}</div><div class="bactions"><button class="bpaid" onclick="markPaid(${b.id})">${b.paid?'Undo':'Mark Paid'}</button><button class="bdel" onclick="deleteBill(${b.id})">×</button></div></div><div class="bright"><div class="bamt">${fmt(b.amount,b.currency)}</div><div class="bdue ${s}">${l}</div></div></div>`;
+    return `<div class="bi"><div class="bd ${s}">${billIco(b.category)}</div><div class="bb"><div class="bname">${b.name}</div><div class="bmeta">${b.category} · ${b.freq}</div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${btag}${aptag}</div><div class="bactions"><button class="bpaid" onclick="markPaid(${b.id})">${b.paid?'Undo':'Mark Paid'}</button><button class="edit-btn" style="font-size:13px;padding:3px 8px;border-radius:7px;background:var(--accent-dim);border:0.5px solid rgba(200,184,122,0.3)" onclick="openEditBill(${b.id})">✎</button><button class="bdel" onclick="deleteBill(${b.id})">×</button></div></div><div class="bright"><div class="bamt">${fmt(b.amount,b.currency)}</div><div class="bdue ${s}">${l}</div></div></div>`;
   }).join('');
 }
 
@@ -1071,12 +1232,215 @@ function scenarioR(d, s, cur) {
   }
 }
 
+// ── MATH ENGINE ───────────────────────────────────────────────────────────────
+function mathEngine(q, cur) {
+  const d = getAnalysis();
+
+  // TOTAL EXPENSES
+  if (mq(q,['total expense','total expenses','total spending','how much did i spend','total spent','sum of expenses','sum expenses'])) {
+    if (!d.totalExpUSD) return `No expenses recorded yet.`;
+    let r = `Total expenses: ${fCur(d.totalExpUSD,cur)}\n\nBreakdown:\n`;
+    d.sortedCats.forEach(([cat,amt])=> r+=`• ${cat}: ${fCur(amt,cur)}\n`);
+    return r;
+  }
+
+  // TOTAL INCOME
+  if (mq(q,['total income','total earnings','total revenue','how much did i earn','how much do i earn','sum of income','sum income','how much i make'])) {
+    if (!d.totalIncUSD) return `No income recorded yet.`;
+    let r=`Total income: ${fCur(d.totalIncUSD,cur)}\n`;
+    if(d.usdInc>0) r+=`• USD: $${d.usdInc.toFixed(2)}\n`;
+    if(d.gtqInc>0) r+=`• GTQ: Q${d.gtqInc.toFixed(2)} (≈${fCur(d.gtqInc/rate,cur)})\n`;
+    r+=`\nAnnual projection: ${fCur(d.totalIncUSD*12,cur)}`;
+    return r;
+  }
+
+  // TOTAL BILLS
+  if (mq(q,['total bills','total bill','how much are my bills','sum of bills','sum bills','bills total','cost of bills','bills cost'])) {
+    if (!bills.length) return `No bills added yet.`;
+    const monthly=bills.reduce((s,b)=>s+mEquiv(b),0);
+    const yearly=bills.reduce((s,b)=>{const a=toUSD(b.amount,b.currency);return s+(b.freq==='monthly'?a*12:b.freq==='weekly'?a*52:b.freq==='yearly'?a:0);},0);
+    let r=`Bills total:\n• Monthly: ${fCur(monthly,cur)}\n• Yearly: ${fCur(yearly,cur)}\n\nBreakdown (${bills.length} bills):\n`;
+    bills.forEach(b=>r+=`• ${b.name}: ${fCur(toUSD(b.amount,b.currency),cur)}/${b.freq}\n`);
+    return r;
+  }
+
+  // TOTAL BALANCE / NET WORTH
+  if (mq(q,['total balance','net worth','overall balance','total net','how much do i have total','all accounts total'])) {
+    const totalBal=accounts.reduce((s,a)=>s+getAccBal(a.id),0);
+    let r=`Total across all accounts: ${fCur(totalBal,cur)}\n\n`;
+    accounts.forEach(a=>{ const b=getAccBal(a.id); r+=`• ${accLbl(a)}: ${fCur(b,cur)}\n`; });
+    return r;
+  }
+
+  // SUM BY CATEGORY
+  const catNames=['food','dining','housing','rent','transport','health','entertainment','clothing','education','utilities','subscriptions'];
+  for (const cn of catNames) {
+    if (q.includes('total '+cn)||q.includes('sum '+cn)||q.includes('how much '+cn)||q.includes(cn+' total')||q.includes(cn+' expenses')) {
+      const match=Object.entries(d.cats).find(([c])=>c.toLowerCase().includes(cn));
+      if (match) return `${match[0]} total: ${fCur(match[1],cur)}\nThis is ${(match[1]/d.totalExpUSD*100).toFixed(1)}% of your total expenses.`;
+      return `No expenses in that category yet.`;
+    }
+  }
+
+  // HOW MANY entries
+  if (mq(q,['how many entries','how many transactions','number of entries','count entries'])) {
+    return `You have ${entries.length} total entries:\n• ${entries.filter(e=>e.type==='income').length} income entries\n• ${entries.filter(e=>e.type==='expense').length} expense entries`;
+  }
+
+  // AVERAGE expense
+  if (mq(q,['average expense','average spending','average transaction','avg expense'])) {
+    const exp=entries.filter(e=>e.type==='expense');
+    if(!exp.length) return `No expenses yet.`;
+    const avg=d.totalExpUSD/exp.length;
+    return `Average expense: ${fCur(avg,cur)}\nBased on ${exp.length} expense entries totaling ${fCur(d.totalExpUSD,cur)}.`;
+  }
+
+  // AVERAGE income
+  if (mq(q,['average income','avg income','average salary'])) {
+    const inc=entries.filter(e=>e.type==='income');
+    if(!inc.length) return `No income entries yet.`;
+    const avg=d.totalIncUSD/inc.length;
+    return `Average income entry: ${fCur(avg,cur)}\nBased on ${inc.length} income entries.`;
+  }
+
+  // BIGGEST expense
+  if (mq(q,['biggest expense','largest expense','most expensive entry','highest expense','most spent'])) {
+    const exp=entries.filter(e=>e.type==='expense');
+    if(!exp.length) return `No expenses yet.`;
+    const top=[...exp].sort((a,b)=>toUSD(b.amount,b.currency)-toUSD(a.amount,a.currency))[0];
+    return `Biggest expense: ${top.description}\n• Amount: ${fCur(toUSD(top.amount,top.currency),cur)}\n• Category: ${top.category}\n• Date: ${new Date(top.date).toLocaleDateString()}${top.accountLabel?`\n• Account: ${top.accountLabel}`:''}`;
+  }
+
+  // BIGGEST income
+  if (mq(q,['biggest income','largest income','highest income','most income'])) {
+    const inc=entries.filter(e=>e.type==='income');
+    if(!inc.length) return `No income entries yet.`;
+    const top=[...inc].sort((a,b)=>toUSD(b.amount,b.currency)-toUSD(a.amount,a.currency))[0];
+    return `Biggest income: ${top.description}\n• Amount: ${fCur(toUSD(top.amount,top.currency),cur)}\n• Category: ${top.category}\n• Date: ${new Date(top.date).toLocaleDateString()}`;
+  }
+
+  // MOST EXPENSIVE BILL
+  if (mq(q,['most expensive bill','biggest bill','highest bill','most expensive recurring'])) {
+    if(!bills.length) return `No bills added yet.`;
+    const top=[...bills].sort((a,b)=>toUSD(b.amount,b.currency)-toUSD(a.amount,a.currency))[0];
+    return `Most expensive bill: ${top.name}\n• Amount: ${fCur(toUSD(top.amount,top.currency),cur)}/${top.freq}\n• Category: ${top.category}\n• Status: ${top.paid?'✓ Paid':dueLabel(top)}${top.accountLabel?`\n• Account: ${top.accountLabel}`:''}`;
+  }
+
+  // AUTOPAY BILLS total
+  if (mq(q,['total autopay','autopay total','how much autopay','autopay bills total'])) {
+    const ap=bills.filter(b=>b.autopay);
+    if(!ap.length) return `No autopay bills set up yet.`;
+    const total=ap.reduce((s,b)=>s+mEquiv(b),0);
+    let r=`Autopay bills total: ${fCur(total,cur)}/month\n\n${ap.length} autopay bills:\n`;
+    ap.forEach(b=>r+=`• ${b.name}: ${fCur(toUSD(b.amount,b.currency),cur)} (card ····${b.last4||'?'})\n`);
+    return r;
+  }
+
+  // UPCOMING BILLS this month
+  if (mq(q,['upcoming bills','bills this month','due this month','what bills are due','bills due'])) {
+    const upcoming=bills.filter(b=>!b.paid).sort((a,b2)=>daysUntil(a)-daysUntil(b2));
+    if(!upcoming.length) return `All bills are paid this month! 🎉`;
+    let r=`Unpaid bills (${upcoming.length}):\n\n`;
+    upcoming.forEach(b=>r+=`• ${b.name}: ${fCur(toUSD(b.amount,b.currency),cur)} — ${dueLabel(b)}\n`);
+    const total=upcoming.reduce((s,b)=>s+mEquiv(b),0);
+    r+=`\nTotal remaining: ${fCur(total,cur)}`;
+    return r;
+  }
+
+  // PAID BILLS
+  if (mq(q,['paid bills','bills paid','what did i pay','bills already paid'])) {
+    const paid=bills.filter(b=>b.paid);
+    if(!paid.length) return `No bills marked as paid yet this month.`;
+    const total=paid.reduce((s,b)=>s+mEquiv(b),0);
+    let r=`Paid bills this month (${paid.length}):\n\n`;
+    paid.forEach(b=>r+=`• ${b.name}: ${fCur(toUSD(b.amount,b.currency),cur)} ✓\n`);
+    r+=`\nTotal paid: ${fCur(total,cur)}`;
+    return r;
+  }
+
+  return null; // not a math query
+}
+
+// ── ENCYCLOPEDIA KNOWLEDGE ────────────────────────────────────────────────────
+function encyclopediaEngine(q) {
+  // FINANCIAL CONCEPTS
+  if (mq(q,['what is inflation','inflation means','inflation definition','what is inflacion'])) {
+    return `Inflation is the rate at which the general price of goods and services rises over time, reducing purchasing power.\n\nIn Guatemala:\n• Annual inflation is typically 3-6%\n• The GTQ is relatively stable but loses value over time\n• This is why saving in USD is often recommended — it holds value better long-term\n\nPractical impact: If inflation is 5%/year, ${fCur(1000,'USD')} today buys what ${fCur(950,'USD')} will buy next year. Your savings need to grow faster than inflation.`;
+  }
+
+  if (mq(q,['what is interest','interest rate','what is tasa de interes','how does interest work'])) {
+    return `Interest is the cost of borrowing money, or the return on saving/investing it.\n\nTypes:\n• Simple interest: calculated only on principal\n• Compound interest: calculated on principal + accumulated interest (much more powerful)\n\nIn Guatemala typical rates:\n• Bank savings: 1-4%\n• Cooperativas: 4-7%\n• Personal loans: 15-30%\n• Credit cards: 24-48%\n\nRule of 72: Divide 72 by your interest rate to find how long to double your money. At 6%, money doubles in 12 years.`;
+  }
+
+  if (mq(q,['what is a budget','how to budget','budgeting','what is presupuesto'])) {
+    return `A budget is a plan for your money — deciding in advance where each dollar/quetzal goes.\n\nMost popular method — 50/30/20:\n• 50% → Needs (rent, food, utilities, transport)\n• 30% → Wants (entertainment, dining out, hobbies)\n• 20% → Savings & investments\n\nWhy budget?\n• Prevents overspending\n• Helps reach goals faster\n• Reduces financial stress\n• Makes patterns visible\n\nTip: Track for 1 month first to see where your money actually goes, then build a realistic budget.`;
+  }
+
+  if (mq(q,['what is an emergency fund','emergency fund definition','fondo de emergencia que es'])) {
+    return `An emergency fund is money set aside for unexpected expenses — job loss, medical emergency, car breakdown, etc.\n\nWhy it matters:\n• Prevents going into debt when surprises happen\n• Gives you financial security and peace of mind\n• Should NOT be invested — needs to be immediately accessible\n\nHow much:\n• Minimum: 3 months of expenses\n• Recommended: 6 months\n• High risk job/freelance: 9-12 months\n\nWhere to keep it:\n• Separate savings account\n• Cooperativa savings account\n• NOT in checking, NOT invested`;
+  }
+
+  if (mq(q,['what is compound interest','compound interest definition','interes compuesto'])) {
+    return `Compound interest is earning interest on your interest — the most powerful force in personal finance.\n\nExample: $1,000 at 7% annually:\n• Year 1: $1,070\n• Year 5: $1,403\n• Year 10: $1,967\n• Year 20: $3,870\n• Year 30: $7,612\n\nThe money more than 7x in 30 years — without adding anything!\n\nKey insight: Start early. $100/month from age 25 at 7% = ~$260,000 by age 65.\nStart at 35 = ~$122,000. Ten years costs you $138,000.`;
+  }
+
+  if (mq(q,['what is a cooperativa','cooperativa','cooperative bank','what is credit union'])) {
+    return `A cooperativa (cooperative) in Guatemala is a member-owned financial institution — like a bank but owned by its members.\n\nAdvantages over banks:\n• Higher savings interest rates (typically 4-7% vs 1-3%)\n• Lower loan interest rates\n• Profits returned to members\n• More personal service\n• More accessible in rural areas\n\nPopular cooperativas in Guatemala:\n• Génesis Empresarial\n• Cooperativa Jardín\n• MICOOPE\n\nBest for: Emergency fund, savings goals, small personal loans`;
+  }
+
+  if (mq(q,['what is an index fund','index fund','what is voo','what is vti','etf definition','what is etf'])) {
+    return `An index fund (or ETF) tracks a market index like the S&P 500 — instead of picking stocks, you own a tiny piece of hundreds of companies.\n\nWhy index funds?\n• Low fees (0.03-0.2% vs 1-2% for managed funds)\n• Automatically diversified\n• Historically beat most professional fund managers\n• Simple — buy and hold\n\nPopular ones:\n• VOO — Vanguard S&P 500 (US top 500 companies)\n• VTI — Vanguard Total Market (entire US market)\n• VEA — International developed markets\n\nHistorical average: ~10% per year (before inflation) for the S&P 500 over 50+ years.`;
+  }
+
+  if (mq(q,['what is interactive brokers','how to invest from guatemala','how to open brokerage','invest internationally from guatemala'])) {
+    return `Interactive Brokers (IBKR) is one of the few international brokers that accepts Guatemalan residents.\n\nHow to open an account:\n1. Go to interactivebrokers.com\n2. Open an Individual account\n3. Select Guatemala as country of residence\n4. Provide DPI (national ID) and proof of address\n5. Fund with wire transfer from your Guatemalan bank\n\nMinimum: No minimum balance required\nFees: Very low ($0 commissions on US stocks/ETFs)\n\nWhat to buy as a beginner:\n• VOO or VTI — simple, diversified, low cost\n• Just buy monthly and hold long-term`;
+  }
+
+  if (mq(q,['what is dollar cost averaging','dca','dollar cost averaging','invest monthly'])) {
+    return `Dollar Cost Averaging (DCA) is investing a fixed amount on a regular schedule, regardless of price.\n\nExample: Invest $50/month in VOO:\n• Month 1: price $400 → buy 0.125 shares\n• Month 2: price $350 → buy 0.143 shares (more!)\n• Month 3: price $450 → buy 0.111 shares\n\nWhy it works:\n• You buy more when prices are low automatically\n• Removes emotion from investing\n• No need to time the market\n• Perfect for beginners with limited capital\n\nBottom line: Just invest consistently every month and don't check prices obsessively.`;
+  }
+
+  if (mq(q,['what is diversification','diversify','what is diversificacion'])) {
+    return `Diversification means spreading your money across different investments to reduce risk.\n\n"Don't put all your eggs in one basket"\n\nExamples:\n• Bad: 100% in one stock (if it crashes, you lose everything)\n• Better: Mix of stocks, bonds, cash\n• Best: International mix across sectors\n\nFor beginners in Guatemala:\n• Emergency fund → Cooperativa savings account\n• Medium-term → USD savings account\n• Long-term → Index fund (VOO/VTI) via Interactive Brokers\n\nThis covers liquidity, currency protection, and growth.`;
+  }
+
+  if (mq(q,['what is credit score','credit score','what is historial crediticio','credit history'])) {
+    return `A credit score is a number (typically 300-850) that measures your creditworthiness — how likely you are to repay debt.\n\nIn Guatemala:\n• Credit history is tracked by Credit bureaus (ASNEF, EQUIFAX)\n• Banks use it to decide loan approval and interest rates\n• Good credit = lower interest rates = saves money\n\nHow to build good credit:\n• Pay all bills on time, every time\n• Don't max out credit cards (use <30% of limit)\n• Keep old accounts open (length matters)\n• Don't apply for too many loans at once\n\nImpact: Good vs bad credit on a $10,000 loan can mean 8% vs 25% interest — a huge difference.`;
+  }
+
+  if (mq(q,['what is gtq','what is quetzal','quetzal currency','guatemala currency','what is the quetzal'])) {
+    return `The Guatemalan Quetzal (GTQ or Q) is Guatemala's official currency.\n\nKey facts:\n• Introduced in 1925\n• Named after the quetzal bird (Guatemala's national symbol)\n• Managed by Banco de Guatemala (Banguat)\n• Relatively stable compared to other Central American currencies\n• Current rate: approximately 1 USD = ${rate} GTQ\n\nHistorical rate: The GTQ has been fairly stable at 7-8 per USD for over a decade.\n\nBest practice:\n• Day-to-day expenses → GTQ\n• Savings and investments → USD\n• International transactions → USD`;
+  }
+
+  if (mq(q,['how to pay off debt','debt payoff','debt strategy','pay debt faster','get out of debt'])) {
+    return `Two main debt payoff strategies:\n\n1. Avalanche Method (mathematically optimal):\n   • Pay minimums on all debts\n   • Put extra money on HIGHEST interest rate first\n   • Saves the most money overall\n\n2. Snowball Method (psychologically easier):\n   • Pay minimums on all debts\n   • Put extra money on SMALLEST balance first\n   • Quick wins keep you motivated\n\nGeneral rules:\n• Never miss a minimum payment (credit damage + fees)\n• High interest debt (>15%) → pay off before investing\n• Low interest debt (<7%) → can invest while paying off\n• Credit card debt is almost always your first priority`;
+  }
+
+  if (mq(q,['what is financial freedom','financial freedom','financial independence','what is fire','retire early'])) {
+    return `Financial freedom means having enough money that work becomes optional — your investments generate enough income to cover your expenses.\n\nThe FIRE number (Financial Independence, Retire Early):\n• Multiply your annual expenses by 25\n• Example: $12,000/year expenses → need $300,000 invested\n• Based on the 4% safe withdrawal rate rule\n\nFor Guatemala context:\nWith lower living costs, financial freedom is more achievable. If you spend Q5,000/month ($640), you need ~$192,000 invested to be financially free — much less than in the US.\n\nPath to get there:\n1. Minimize expenses\n2. Maximize savings rate\n3. Invest consistently in index funds\n4. Time and compound interest do the work`;
+  }
+
+  if (mq(q,['rule of 72','rule of 72','72 rule','how long to double'])) {
+    return `The Rule of 72 is a quick way to estimate how long it takes to double your money.\n\nFormula: 72 ÷ interest rate = years to double\n\nExamples:\n• 2% (basic savings): 36 years to double\n• 4% (cooperativa): 18 years to double\n• 6% (bonds): 12 years to double\n• 8% (mixed portfolio): 9 years to double\n• 10% (S&P 500 average): 7.2 years to double\n\nThis shows why the interest rate you earn matters enormously over time. A 1% difference compounded over decades is massive.`;
+  }
+
+  return null; // not an encyclopedia query
+}
+
 function getResponse(input) {
   const d=getAnalysis();
   const q=input.toLowerCase().trim();
   const cur=detectCur(q);
 
+  // Encyclopedia works even without data
+  const encResult=encyclopediaEngine(q);
+  if (encResult) { lastTopic='encyclopedia'; return encResult; }
+
   if (!d.hasData) return `No data yet! Start by adding accounts in ⚙ Settings, then income/expenses in ＋ or bills in 📋.`;
+
+  // Math engine — sums and calculations
+  const mathResult=mathEngine(q,cur);
+  if (mathResult) { lastTopic='math'; return mathResult; }
 
   if (mq(q,['what if','what would','if i cut','if i earn','if i save','si yo'])) {
     const s=detectScenario(q);
@@ -1362,7 +1726,7 @@ function initAdvisor(){
     ?`Hey! I can see your data — ${parts.join(', ')}. What would you like to know?`
     :`Hey! I don't see any data yet. Add income, expenses, bills or accounts and I'll give you personalized advice!`;
   addMsg(msg,'ai');
-  renderChips(['How much should I save?','Am I on track?','Tell me about my bills','Full summary']);
+  renderChips(['Total bills in GTQ','Total expenses','Am I on track?','What is compound interest?']);
 }
 
 // ── VISIBILITY CHANGE ─────────────────────────────────────────────────────────
